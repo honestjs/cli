@@ -11,7 +11,9 @@
 	"module": "./dist/index.js",
 	"type": "module",
 	"bin": {
-		"honestjs": "./dist/index.js"
+		"honestjs": "./dist/index.js",
+		"honest": "./dist/index.js",
+		"hnjs": "./dist/index.js"
 	},
 	"dependencies": {
 		"@bluwy/giget-core": "^0.1.3",
@@ -64,7 +66,8 @@
 	],
 	"license": "MIT",
 	"publishConfig": {
-		"registry": "https://registry.npmjs.org"
+		"registry": "https://registry.npmjs.org",
+		"access": "public"
 	},
 	"scripts": {
 		"clean": "rm -rf dist",
