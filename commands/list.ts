@@ -1,6 +1,6 @@
-import chalk from 'chalk'
 import { Command } from 'commander'
-import { getTemplates } from '../utils/template'
+import { consola } from 'consola'
+import { cleanupCache, getTemplates } from '../utils'
 
 const listCommand = new Command('list')
 	.description('List available templates')
@@ -9,23 +9,14 @@ const listCommand = new Command('list')
 	.option('-t, --tag <tag>', 'Filter by tag')
 	.action(async (options) => {
 		try {
-			let templates
-			try {
-				templates = await getTemplates()
-			} catch (error) {
-				console.error(chalk.red('Error:'), error instanceof Error ? error.message : 'Failed to fetch templates')
-				console.log(
-					chalk.yellow(
-						'\nMake sure you have internet connection and the honestjs/templates repository is accessible.'
-					)
-				)
-				process.exit(1)
-			}
+			consola.start('Fetching templates...')
+			const templates = await getTemplates()
+			consola.success('Templates fetched successfully!')
 
 			let filteredTemplates = templates
 
 			if (options.category) {
-				filteredTemplates = templates.filter((t) => t.category === options.category)
+				filteredTemplates = templates.filter((t) => t.category === options.cagetTemplates())
 			}
 
 			if (options.tag) {
@@ -33,17 +24,17 @@ const listCommand = new Command('list')
 			}
 
 			if (options.json) {
-				console.log(JSON.stringify(filteredTemplates, null, 2))
+				consola.log(JSON.stringify(filteredTemplates, null, 2))
 				return
 			}
 
 			if (filteredTemplates.length === 0) {
-				console.log(chalk.yellow('No templates found matching your criteria.'))
+				consola.warn('No templates found matching your criteria.')
 				return
 			}
 
-			console.log(chalk.cyan('\n📋 Available Templates:'))
-			console.log(chalk.cyan('=====================\n'))
+			consola.info('\n📋 Available Templates:')
+			consola.info('=====================\n')
 
 			const templatesByCategory = filteredTemplates.reduce(
 				(acc, template) => {
@@ -58,60 +49,62 @@ const listCommand = new Command('list')
 			)
 
 			Object.entries(templatesByCategory).forEach(([category, categoryTemplates]) => {
-				console.log(chalk.white(`${chalk.bold(category.toUpperCase())}:`))
+				consola.log(`${consola.log(category.toUpperCase())}:`)
 
 				categoryTemplates.forEach((template, index) => {
-					console.log(chalk.white(`  ${index + 1}. ${chalk.bold(template.name)}`))
-					console.log(chalk.gray(`     ${template.description}`))
+					consola.log(`  ${index + 1}. ${template.name}`)
+					consola.log(`     ${template.description}`)
 
 					if (template.version) {
-						console.log(chalk.blue(`     Version: ${template.version}`))
+						consola.info(`     Version: ${template.version}`)
 					}
 
 					if (template.author) {
-						console.log(chalk.blue(`     Author: ${template.author}`))
+						consola.info(`     Author: ${template.author}`)
 					}
 
 					if (template.tags && template.tags.length > 0) {
-						console.log(chalk.blue(`     Tags: ${template.tags.join(', ')}`))
+						consola.info(`     Tags: ${template.tags.join(', ')}`)
 					}
 
-					console.log(chalk.blue(`     Template: honestjs/templates/${template.path}`))
-					console.log('')
+					consola.info(`     Template: honestjs/templates/${template.path}`)
+					consola.log('')
 				})
 			})
 
 			const categories = [...new Set(templates.map((t) => t.category).filter(Boolean))]
 			if (categories.length > 0) {
-				console.log(chalk.cyan('Categories:'))
+				consola.info('Categories:')
 				categories.forEach((category) => {
-					console.log(chalk.white(`  • ${category}`))
+					consola.log(`  • ${category}`)
 				})
-				console.log('')
+				consola.log('')
 			}
 
 			const allTags = [...new Set(templates.flatMap((t) => t.tags || []))]
 			if (allTags.length > 0) {
-				console.log(chalk.cyan('Tags:'))
+				consola.info('Tags:')
 				allTags.forEach((tag) => {
-					console.log(chalk.white(`  • ${tag}`))
+					consola.log(`  • ${tag}`)
 				})
-				console.log('')
+				consola.log('')
 			}
 
-			console.log(chalk.cyan('Usage:'))
-			console.log(chalk.white('  honestjs new <project-name> --template <template-name>'))
-			console.log(chalk.white('  honestjs new <project-name> (interactive mode)'))
-			console.log(chalk.white('  honestjs list --category <category>'))
-			console.log(chalk.white('  honestjs list --tag <tag>'))
-			console.log('')
-			console.log(chalk.cyan('All templates support:'))
-			console.log(chalk.gray('  • TypeScript, ESLint, Prettier, Docker, Git'))
-			console.log(chalk.gray('  • Package manager selection (Bun, npm, yarn, pnpm)'))
-			console.log(chalk.gray('  • Automatic dependency installation'))
+			consola.info('Usage:')
+			consola.log('  honestjs new <project-name> --template <template-name>')
+			consola.log('  honestjs new <project-name> (interactive mode)')
+			consola.log('  honestjs list --category <category>')
+			consola.log('  honestjs list --tag <tag>')
+			consola.log('')
+			consola.info('All templates support:')
+			consola.log('  • TypeScript, ESLint, Prettier, Docker, Git')
+			consola.log('  • Package manager selection (Bun, npm, yarn, pnpm)')
+			consola.log('  • Automatic dependency installation')
 		} catch (error) {
-			console.error(chalk.red('Error:'), error instanceof Error ? error.message : 'Unknown error')
+			consola.error(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`)
 			process.exit(1)
+		} finally {
+			await cleanupCache()
 		}
 	})
 

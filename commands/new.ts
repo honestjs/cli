@@ -1,9 +1,8 @@
-import chalk from 'chalk'
 import { Command } from 'commander'
+import { consola } from 'consola'
 import fs from 'fs-extra'
-import inquirer from 'inquirer'
-import ora from 'ora'
-import { copyTemplate, getTemplatePrompts, getTemplates } from '../utils/template'
+import prompts, { PromptObject } from 'prompts'
+import { cleanupCache, copyTemplate, getTemplatePrompts, getTemplates, Template } from '../utils'
 
 interface ProjectConfig {
 	name: string
@@ -15,6 +14,7 @@ interface ProjectConfig {
 	docker: boolean
 	git: boolean
 	install: boolean
+	[key: string]: any
 }
 
 const newCommand = new Command('new')
@@ -36,243 +36,201 @@ const newCommand = new Command('new')
 	.option('--no-install', 'Skip dependency installation')
 	.option('-y, --yes', 'Skip prompts and use defaults')
 	.action(async (projectName, options) => {
+		let config: ProjectConfig = {
+			name: projectName || '',
+			template: options.template || '',
+			packageManager: options.packageManager,
+			typescript: options.typescript,
+			eslint: options.eslint,
+			prettier: options.prettier,
+			docker: options.docker,
+			git: options.git,
+			install: options.install
+		}
+
 		try {
-			let config: ProjectConfig = {
-				name: projectName || '',
-				template: options.template || '',
-				packageManager: options.packageManager,
-				typescript: options.typescript,
-				eslint: options.eslint,
-				prettier: options.prettier,
-				docker: options.docker,
-				git: options.git,
-				install: options.install
-			}
+			const templates = await getTemplates()
 
-			if (!options.yes) {
-				config = await promptForConfiguration(config)
+			if (options.yes) {
+				config = createDefaultConfig(config, templates)
 			} else {
-				config = {
-					...config,
-					packageManager: config.packageManager || 'bun',
-					typescript: config.typescript ?? true,
-					eslint: config.eslint ?? true,
-					prettier: config.prettier ?? true,
-					docker: config.docker ?? true,
-					git: config.git ?? true,
-					install: config.install ?? true
-				}
+				config = await promptForConfiguration(config, templates)
 			}
 
-			if (!config.name) {
-				console.error(chalk.red('Error: Project name is required'))
-				process.exit(1)
-			}
+			validateProjectConfig(config)
 
-			if (fs.existsSync(config.name)) {
-				console.error(chalk.red(`Error: Directory '${config.name}' already exists`))
-				process.exit(1)
-			}
+			consola.start('Creating project...')
+			await copyTemplate(config.template, config.name, config)
+			consola.success('Project created successfully!')
 
-			let templates
-			try {
-				templates = await getTemplates()
-			} catch (error) {
-				console.error(chalk.red('Error:'), error instanceof Error ? error.message : 'Failed to fetch templates')
-				console.log(
-					chalk.yellow(
-						'\nMake sure you have internet connection and the honestjs/templates repository is accessible.'
-					)
-				)
-				process.exit(1)
-			}
-
-			if (!config.template) {
-				config.template = 'barebone'
-			}
-
-			if (!templates.find((t) => t.name === config.template)) {
-				console.error(chalk.red(`Error: Template '${config.template}' not found`))
-				console.log(chalk.yellow('Available templates:'))
-				templates.forEach((t) => {
-					console.log(chalk.cyan(`  - ${t.name}: ${t.description}`))
-				})
-				process.exit(1)
-			}
-
-			const spinner = ora('Creating project...').start()
-
-			try {
-				await copyTemplate(config.template, config.name, config)
-				spinner.succeed(chalk.green('Project created successfully!'))
-
-				showNextSteps(config)
-			} catch (error) {
-				spinner.fail(chalk.red('Failed to create project'))
-				console.error(chalk.red('Error:'), error instanceof Error ? error.message : 'Unknown error')
-				process.exit(1)
-			}
+			showNextSteps(config)
 		} catch (error) {
-			console.error(chalk.red('Error:'), error instanceof Error ? error.message : 'Unknown error')
-			process.exit(1)
+			handleError(error)
+		} finally {
+			await cleanupCache()
 		}
 	})
 
-async function promptForConfiguration(initialConfig: ProjectConfig): Promise<ProjectConfig> {
+function createDefaultConfig(initialConfig: ProjectConfig, templates: Template[]): ProjectConfig {
+	const defaultConfig = {
+		...initialConfig,
+		name: initialConfig.name || 'honestjs-project',
+		template: initialConfig.template || 'barebone',
+		packageManager: initialConfig.packageManager || 'bun',
+		typescript: initialConfig.typescript ?? true,
+		eslint: initialConfig.eslint ?? true,
+		prettier: initialConfig.prettier ?? true,
+		docker: initialConfig.docker ?? true,
+		git: initialConfig.git ?? true,
+		install: initialConfig.install ?? true
+	}
+
+	if (!templates.find((t) => t.name === defaultConfig.template)) {
+		consola.error(`Error: Template '${defaultConfig.template}' not found`)
+		consola.warn('Available templates:')
+		templates.forEach((t) => {
+			consola.info(`  - ${t.name}: ${t.description}`)
+		})
+		process.exit(1)
+	}
+
+	return defaultConfig
+}
+
+async function promptForConfiguration(initialConfig: ProjectConfig, templates: Template[]): Promise<ProjectConfig> {
 	let config = { ...initialConfig }
 
-	if (!config.name) {
-		const nameAnswer = await inquirer.prompt([
-			{
-				type: 'input',
-				name: 'name',
-				message: 'What is the name of your project?',
-				validate: (input: string) => {
-					if (!input.trim()) return 'Project name is required'
-					if (!/^[a-z0-9-]+$/.test(input)) {
-						return 'Project name must be lowercase with hyphens only'
-					}
-					return true
+	const questions: PromptObject[] = [
+		{
+			type: config.name ? null : 'text',
+			name: 'name',
+			message: 'What is the name of your project?',
+			validate: (input: string) => {
+				if (!input.trim()) return 'Project name is required'
+				if (!/^[a-z0-9-]+$/.test(input)) {
+					return 'Project name must be lowercase with hyphens only'
 				}
+				if (fs.existsSync(input.trim())) {
+					return `Directory '${input.trim()}' already exists`
+				}
+				return true
 			}
-		])
-		config = { ...config, ...nameAnswer }
-	}
-
-	if (!config.template) {
-		let templates
-		try {
-			templates = await getTemplates()
-		} catch (error) {
-			console.error(chalk.red('Error:'), error instanceof Error ? error.message : 'Failed to fetch templates')
-			console.log(
-				chalk.yellow(
-					'\nMake sure you have internet connection and the honestjs/templates repository is accessible.'
-				)
-			)
-			process.exit(1)
+		},
+		{
+			type: config.template ? null : 'select',
+			name: 'template',
+			message: 'Which template would you like to use?',
+			choices: templates.map((t) => ({
+				title: `${t.name}: ${t.description}`,
+				value: t.name
+			}))
 		}
+	]
 
-		const templateAnswer = await inquirer.prompt([
-			{
-				type: 'list',
-				name: 'template',
-				message: 'Which template would you like to use?',
-				choices: templates.map((t) => ({
-					name: `${t.name}: ${t.description}`,
-					value: t.name
-				}))
-			}
-		])
-		config = { ...config, ...templateAnswer }
-	}
+	const answers = await prompts(questions.filter((q: PromptObject) => q.type !== null))
+	config = { ...config, ...answers }
 
 	const templatePrompts = await getTemplatePrompts(config.template)
 	if (templatePrompts && templatePrompts.length > 0) {
-		console.log(chalk.cyan(`\n📋 Configuring ${config.template} template...`))
-		const templateAnswers = await inquirer.prompt(templatePrompts)
+		consola.info(`\n📋 Configuring ${config.template} template...`)
+		const templateAnswers = await prompts(templatePrompts)
 		config = { ...config, ...templateAnswers }
 	}
 
-	const generalQuestions: any[] = []
-
-	if (config.packageManager === undefined) {
-		generalQuestions.push({
-			type: 'list',
+	const generalQuestions: PromptObject[] = [
+		{
+			type: config.packageManager === undefined ? 'select' : null,
 			name: 'packageManager',
 			message: 'Which package manager would you like to use?',
 			choices: [
-				{ name: 'Bun (recommended)', value: 'bun' },
-				{ name: 'npm', value: 'npm' },
-				{ name: 'yarn', value: 'yarn' },
-				{ name: 'pnpm', value: 'pnpm' }
+				{ title: 'Bun (recommended)', value: 'bun' },
+				{ title: 'npm', value: 'npm' },
+				{ title: 'yarn', value: 'yarn' },
+				{ title: 'pnpm', value: 'pnpm' }
 			],
-			default: 'bun'
-		})
-	}
-
-	if (config.typescript === undefined) {
-		generalQuestions.push({
-			type: 'confirm',
+			initial: 0
+		},
+		{
+			type: config.typescript === undefined ? 'toggle' : null,
 			name: 'typescript',
 			message: 'Use TypeScript?',
-			default: true
-		})
-	}
-
-	if (config.eslint === undefined) {
-		generalQuestions.push({
-			type: 'confirm',
+			initial: true,
+			active: 'yes',
+			inactive: 'no'
+		},
+		{
+			type: config.eslint === undefined ? 'toggle' : null,
 			name: 'eslint',
 			message: 'Add ESLint for code linting?',
-			default: true
-		})
-	}
-
-	if (config.prettier === undefined) {
-		generalQuestions.push({
-			type: 'confirm',
+			initial: true,
+			active: 'yes',
+			inactive: 'no'
+		},
+		{
+			type: config.prettier === undefined ? 'toggle' : null,
 			name: 'prettier',
 			message: 'Add Prettier for code formatting?',
-			default: true
-		})
-	}
-
-	if (config.docker === undefined) {
-		generalQuestions.push({
-			type: 'confirm',
+			initial: true,
+			active: 'yes',
+			inactive: 'no'
+		},
+		{
+			type: config.docker === undefined ? 'toggle' : null,
 			name: 'docker',
 			message: 'Add Docker configuration?',
-			default: true
-		})
-	}
-
-	if (config.git === undefined) {
-		generalQuestions.push({
-			type: 'confirm',
+			initial: true,
+			active: 'yes',
+			inactive: 'no'
+		},
+		{
+			type: config.git === undefined ? 'toggle' : null,
 			name: 'git',
 			message: 'Initialize git repository?',
-			default: true
-		})
-	}
-
-	if (config.install === undefined) {
-		generalQuestions.push({
-			type: 'confirm',
+			initial: true,
+			active: 'yes',
+			inactive: 'no'
+		},
+		{
+			type: config.install === undefined ? 'toggle' : null,
 			name: 'install',
 			message: 'Install dependencies after creation?',
-			default: true
-		})
+			initial: true,
+			active: 'yes',
+			inactive: 'no'
+		}
+	]
+
+	const generalAnswers = await prompts(generalQuestions.filter((q: PromptObject) => q.type !== null))
+	return { ...config, ...generalAnswers }
+}
+
+function validateProjectConfig(config: ProjectConfig): void {
+	if (!config.name) {
+		consola.error('Error: Project name is required')
+		process.exit(1)
 	}
 
-	if (generalQuestions.length > 0) {
-		const generalAnswers = await inquirer.prompt(generalQuestions)
-		config = { ...config, ...generalAnswers }
-	}
-
-	return {
-		...config,
-		packageManager: config.packageManager || 'bun',
-		typescript: config.typescript ?? true,
-		eslint: config.eslint ?? true,
-		prettier: config.prettier ?? true,
-		docker: config.docker ?? true,
-		git: config.git ?? true,
-		install: config.install ?? true
+	if (fs.existsSync(config.name)) {
+		consola.error(`Error: Directory '${config.name}' already exists`)
+		process.exit(1)
 	}
 }
 
 function showNextSteps(config: ProjectConfig): void {
-	console.log('\n' + chalk.green('🎉 Project created successfully!'))
-	console.log('\n' + chalk.blue('Next steps:'))
-	console.log(chalk.cyan(`  cd ${config.name}`))
+	consola.info('\nNext steps:')
+	consola.log(`  cd ${config.name}`)
 
 	if (!config.install) {
-		console.log(chalk.cyan(`  ${config.packageManager} install`))
+		consola.log(`  ${config.packageManager} install`)
 	}
 
-	console.log(chalk.cyan(`  ${config.packageManager} run dev`))
-	console.log('\n' + chalk.gray('Happy coding! 🚀'))
+	consola.log(`  ${config.packageManager} run dev`)
+	consola.log('\nHappy coding! 🚀')
+}
+
+function handleError(error: any): void {
+	consola.error(`\nError: ${error instanceof Error ? error.message : 'An unknown error occurred'}`)
+	process.exit(1)
 }
 
 export { newCommand }

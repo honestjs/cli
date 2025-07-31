@@ -1,6 +1,5 @@
-import chalk from 'chalk'
 import { Command } from 'commander'
-import ora from 'ora'
+import { consola } from 'consola'
 import { generateFilter } from '../generators/components/filter'
 import { generateGuard } from '../generators/components/guard'
 import { generateMiddleware } from '../generators/components/middleware'
@@ -30,7 +29,7 @@ const generateCommand = new Command('generate')
 	.option('--export', 'Export the generated item')
 	.action(async (schematic, name, options) => {
 		try {
-			const spinner = ora('Generating files...').start()
+			consola.start('Generating files...')
 
 			const generateOptions: GenerateOptions = {
 				name,
@@ -76,47 +75,43 @@ const generateCommand = new Command('generate')
 					result = await generatePipe(generateOptions)
 					break
 				default:
-					spinner.fail(chalk.red(`Unknown schematic: ${schematic}`))
-					console.log(chalk.yellow('\nAvailable schematics:'))
-					console.log(chalk.white('  controller (c)     - Generate a controller'))
-					console.log(chalk.white('  service (s)         - Generate a service'))
-					console.log(chalk.white('  module (m)          - Generate a module'))
-					console.log(chalk.white('  view (v)            - Generate a view'))
-					console.log(chalk.white('  middleware (c-m)    - Generate a middleware'))
-					console.log(chalk.white('  guard (c-g)         - Generate a guard'))
-					console.log(chalk.white('  filter (c-f)        - Generate a filter'))
-					console.log(chalk.white('  pipe (c-p)          - Generate a pipe'))
-					console.log(chalk.yellow('\nExamples:'))
-					console.log(chalk.white('  honestjs g controller user    -> modules/users/users.controller.ts'))
-					console.log(chalk.white('  honestjs g controller users   -> modules/users/users.controller.ts'))
-					console.log(chalk.white('  honestjs g service user       -> modules/users/users.service.ts'))
-					console.log(chalk.white('  honestjs g view users         -> modules/users/views/users.view.tsx'))
-					console.log(
-						chalk.white('  honestjs g middleware logger  -> components/logger/logger.middleware.ts')
-					)
-					console.log(chalk.white('  honestjs g guard auth         -> components/auth/auth.guard.ts'))
-					console.log(
-						chalk.white('  honestjs g filter notfound    -> components/notfound/notfound.filter.ts')
-					)
-					console.log(chalk.white('  honestjs g pipe parseInt      -> components/parseint/parseint.pipe.ts'))
+					consola.error(`Unknown schematic: ${schematic}`)
+					consola.warn('\nAvailable schematics:')
+					consola.log('  controller (c)     - Generate a controller')
+					consola.log('  service (s)         - Generate a service')
+					consola.log('  module (m)          - Generate a module')
+					consola.log('  view (v)            - Generate a view')
+					consola.log('  middleware (c-m)    - Generate a middleware')
+					consola.log('  guard (c-g)         - Generate a guard')
+					consola.log('  filter (c-f)        - Generate a filter')
+					consola.log('  pipe (c-p)          - Generate a pipe')
+					consola.warn('\nExamples:')
+					consola.log('  honestjs g controller user    -> modules/users/users.controller.ts')
+					consola.log('  honestjs g controller users   -> modules/users/users.controller.ts')
+					consola.log('  honestjs g service user       -> modules/users/users.service.ts')
+					consola.log('  honestjs g view users         -> modules/users/views/users.view.tsx')
+					consola.log('  honestjs g middleware logger  -> components/logger/logger.middleware.ts')
+					consola.log('  honestjs g guard auth         -> components/auth/auth.guard.ts')
+					consola.log('  honestjs g filter notfound    -> components/notfound/notfound.filter.ts')
+					consola.log('  honestjs g pipe parseInt      -> components/parseint/parseint.pipe.ts')
 					process.exit(1)
 			}
 
-			spinner.succeed(chalk.green('Files generated successfully!'))
+			consola.success('Files generated successfully!')
 
-			console.log(chalk.cyan('\n📁 Generated files:'))
+			consola.info('\n📁 Generated files:')
 			result.files.forEach((file: string) => {
-				console.log(chalk.white(`  ✓ ${file}`))
+				consola.log(`  ✓ ${file}`)
 			})
 
 			if (result.imports.length > 0) {
-				console.log(chalk.cyan('\n📦 Import statements to add:'))
+				consola.info('\n📦 Import statements to add:')
 				result.imports.forEach((importStmt: string) => {
-					console.log(chalk.white(`  ${importStmt}`))
+					consola.log(`  ${importStmt}`)
 				})
 			}
 		} catch (error) {
-			console.error(chalk.red('Error:'), error instanceof Error ? error.message : 'Unknown error')
+			consola.error(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`)
 			process.exit(1)
 		}
 	})
