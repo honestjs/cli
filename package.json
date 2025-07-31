@@ -11,7 +11,7 @@
 	"module": "./dist/index.js",
 	"type": "module",
 	"bin": {
-		"honest": "./dist/index.js"
+		"honestjs": "./dist/index.js"
 	},
 	"dependencies": {
 		"@bluwy/giget-core": "^0.1.3",
