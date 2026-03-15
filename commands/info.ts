@@ -1,8 +1,28 @@
+/**
+ * `honestjs info` - Shows CLI version, available templates, and environment info.
+ * Version is resolved from the CLI package (works when bundled or installed).
+ */
+
 import { Command } from 'commander'
 import { consola } from 'consola'
 import fs from 'fs-extra'
 import path from 'path'
-import { cleanupCache, getTemplates } from '../utils'
+import { fileURLToPath } from 'url'
+import { getTemplates } from '../utils'
+
+/** Traverses up from this file to find package.json with name @honestjs/cli. */
+function getCliPackagePath(): string {
+	let dir = path.dirname(fileURLToPath(import.meta.url))
+	for (let i = 0; i < 5; i++) {
+		const p = path.join(dir, 'package.json')
+		if (fs.existsSync(p)) {
+			const pkg = JSON.parse(fs.readFileSync(p, 'utf-8'))
+			if (pkg.name === '@honestjs/cli') return p
+		}
+		dir = path.dirname(dir)
+	}
+	throw new Error('Could not find CLI package.json')
+}
 
 const infoCommand = new Command('info').description('Show CLI and template information').action(async () => {
 	try {
@@ -13,7 +33,12 @@ const infoCommand = new Command('info').description('Show CLI and template infor
 		consola.info('\n🚀 HonestJS CLI Information')
 		consola.info('==========================\n')
 
-		const packageJson = await fs.readJson(path.join(process.cwd(), 'package.json'))
+		let packageJson: { version?: string } = { version: 'unknown' }
+		try {
+			packageJson = await fs.readJson(getCliPackagePath())
+		} catch {
+			// CLI package not found, use unknown
+		}
 		consola.log(`CLI Version: ${packageJson.version}`)
 		consola.log(`Runtime: Bun`)
 		consola.log(`Templates Repository: honestjs/templates`)
@@ -39,8 +64,6 @@ const infoCommand = new Command('info').description('Show CLI and template infor
 	} catch (error) {
 		consola.error(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`)
 		process.exit(1)
-	} finally {
-		await cleanupCache()
 	}
 })
 

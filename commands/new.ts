@@ -1,21 +1,13 @@
+/**
+ * `honestjs new` - Creates a new HonestJS project from a template.
+ * Supports interactive prompts or --yes for defaults. Templates: blank, barebone, mvc.
+ */
+
 import { Command } from 'commander'
 import { consola } from 'consola'
 import fs from 'fs-extra'
 import prompts, { PromptObject } from 'prompts'
-import { cleanupCache, copyTemplate, getTemplatePrompts, getTemplates, Template } from '../utils'
-
-interface ProjectConfig {
-	name: string
-	template: string
-	packageManager: 'bun' | 'npm' | 'yarn' | 'pnpm'
-	typescript: boolean
-	eslint: boolean
-	prettier: boolean
-	docker: boolean
-	git: boolean
-	install: boolean
-	[key: string]: any
-}
+import { copyTemplate, getTemplatePrompts, getTemplates, type ProjectConfig, type Template } from '../utils'
 
 const newCommand = new Command('new')
 	.description('Create a new honestjs project')
@@ -66,23 +58,26 @@ const newCommand = new Command('new')
 			showNextSteps(config)
 		} catch (error) {
 			handleError(error)
-		} finally {
-			await cleanupCache()
 		}
 	})
 
+/** Builds config with defaults when --yes is used. Validates template exists. */
 function createDefaultConfig(initialConfig: ProjectConfig, templates: Template[]): ProjectConfig {
+	const template = initialConfig.template || 'barebone'
 	const defaultConfig = {
 		...initialConfig,
 		name: initialConfig.name || 'honestjs-project',
-		template: initialConfig.template || 'barebone',
+		template,
 		packageManager: initialConfig.packageManager || 'bun',
 		typescript: initialConfig.typescript ?? true,
 		eslint: initialConfig.eslint ?? true,
 		prettier: initialConfig.prettier ?? true,
 		docker: initialConfig.docker ?? true,
 		git: initialConfig.git ?? true,
-		install: initialConfig.install ?? true
+		install: initialConfig.install ?? true,
+		// Template-specific prompt defaults (used by transforms)
+		testing: initialConfig.testing ?? true,
+		frontend: initialConfig.frontend ?? template === 'mvc'
 	}
 
 	if (!templates.find((t) => t.name === defaultConfig.template)) {
@@ -97,6 +92,7 @@ function createDefaultConfig(initialConfig: ProjectConfig, templates: Template[]
 	return defaultConfig
 }
 
+/** Runs interactive prompts: project name, template, template-specific options, then general options. */
 async function promptForConfiguration(initialConfig: ProjectConfig, templates: Template[]): Promise<ProjectConfig> {
 	let config = { ...initialConfig }
 
@@ -204,6 +200,7 @@ async function promptForConfiguration(initialConfig: ProjectConfig, templates: T
 	return { ...config, ...generalAnswers }
 }
 
+/** Ensures project name is set and target directory does not exist. */
 function validateProjectConfig(config: ProjectConfig): void {
 	if (!config.name) {
 		consola.error('Error: Project name is required')
@@ -216,6 +213,7 @@ function validateProjectConfig(config: ProjectConfig): void {
 	}
 }
 
+/** Prints post-creation instructions (cd, install, dev). */
 function showNextSteps(config: ProjectConfig): void {
 	consola.info('\nNext steps:')
 	consola.log(`  cd ${config.name}`)
@@ -228,7 +226,8 @@ function showNextSteps(config: ProjectConfig): void {
 	consola.log('\nHappy coding! 🚀')
 }
 
-function handleError(error: any): void {
+/** Logs error and exits with code 1. */
+function handleError(error: unknown): void {
 	consola.error(`\nError: ${error instanceof Error ? error.message : 'An unknown error occurred'}`)
 	process.exit(1)
 }

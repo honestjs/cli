@@ -1,3 +1,7 @@
+/**
+ * Generates a guard component (components/<name>/<name>.guard.ts).
+ */
+
 import path from 'path'
 import { BaseGenerator, GenerateOptions, GenerateResult } from '../base'
 

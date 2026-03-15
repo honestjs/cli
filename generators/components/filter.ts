@@ -1,3 +1,7 @@
+/**
+ * Generates an exception filter component (components/<name>/<name>.filter.ts).
+ */
+
 import path from 'path'
 import { BaseGenerator, GenerateOptions, GenerateResult } from '../base'
 

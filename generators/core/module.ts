@@ -1,3 +1,7 @@
+/**
+ * Generates a module that registers controller and service.
+ */
+
 import path from 'path'
 import { BaseGenerator, GenerateOptions, GenerateResult } from '../base'
 

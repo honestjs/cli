@@ -1,3 +1,7 @@
+/**
+ * Generates a pipe component (components/<name>/<name>.pipe.ts).
+ */
+
 import path from 'path'
 import { BaseGenerator, GenerateOptions, GenerateResult } from '../base'
 

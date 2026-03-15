@@ -1,15 +1,26 @@
 #!/usr/bin/env node
+/**
+ * HonestJS CLI entry point.
+ * Registers commands (new, list, info, generate) and parses CLI arguments.
+ * Version is read from package.json at runtime.
+ */
 
 import chalk from 'chalk'
 import { Command } from 'commander'
+import { readFileSync } from 'fs'
+import { dirname, join } from 'path'
+import { fileURLToPath } from 'url'
 import { generateCommand } from './commands/generate.js'
 import { infoCommand } from './commands/info.js'
 import { listCommand } from './commands/list.js'
 import { newCommand } from './commands/new.js'
 
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'))
+
 const program = new Command()
 
-program.name('honestjs').description('CLI tool for scaffolding honestjs projects').version('1.0.0')
+program.name('honestjs').description('CLI tool for scaffolding honestjs projects').version(pkg.version)
 
 program.addCommand(newCommand)
 program.addCommand(listCommand)

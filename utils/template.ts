@@ -1,6 +1,12 @@
+/**
+ * Template utilities: registry loading, template prompts, and project scaffolding.
+ * Templates are fetched from honestjs/templates (via cache) and copied with transforms.
+ */
+
 import { consola } from 'consola'
 import fs from 'fs-extra'
 import path from 'path'
+import type { PromptObject } from 'prompts'
 import { getTemplateCache } from './cache'
 import { applyProjectConfiguration, applyTemplateTransforms, copySharedConfigs } from './transforms'
 
@@ -30,8 +36,12 @@ export interface ProjectConfig {
 	docker: boolean
 	git: boolean
 	install: boolean
+	testing?: boolean
+	frontend?: boolean
+	[key: string]: unknown
 }
 
+/** Loads the template registry (templates.json) from the cache and returns template metadata. */
 export async function getTemplates(): Promise<Template[]> {
 	const cacheDir = await getTemplateCache()
 	const registryPath = path.join(cacheDir, 'templates.json')
@@ -48,7 +58,8 @@ export async function getTemplates(): Promise<Template[]> {
 	throw new Error('templates.json not found in repository')
 }
 
-export async function getTemplatePrompts(templateName: string): Promise<any[] | null> {
+/** Loads template-specific prompts (prompts.js) for interactive configuration. */
+export async function getTemplatePrompts(templateName: string): Promise<PromptObject[] | null> {
 	const cacheDir = await getTemplateCache()
 	const templates = await getTemplates()
 	const template = templates.find((t) => t.name === templateName)
@@ -77,6 +88,10 @@ export async function getTemplatePrompts(templateName: string): Promise<any[] | 
 	return null
 }
 
+/**
+ * Scaffolds a new project: copies template files, applies transforms, copies shared configs.
+ * On failure, removes the partially created project directory.
+ */
 export async function copyTemplate(
 	templateName: string,
 	projectName: string,

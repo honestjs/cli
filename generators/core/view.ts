@@ -1,3 +1,7 @@
+/**
+ * Generates a Hono JSX view component.
+ */
+
 import path from 'path'
 import { BaseGenerator, GenerateOptions, GenerateResult } from '../base'
 

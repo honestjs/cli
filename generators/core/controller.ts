@@ -1,3 +1,7 @@
+/**
+ * Generates a REST controller with CRUD methods and a matching service import.
+ */
+
 import path from 'path'
 import { BaseGenerator, GenerateOptions, GenerateResult } from '../base'
 

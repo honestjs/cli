@@ -1,6 +1,11 @@
+/**
+ * `honestjs list` - Lists available templates with optional filtering by category or tag.
+ * Output can be human-readable (grouped by category) or JSON.
+ */
+
 import { Command } from 'commander'
 import { consola } from 'consola'
-import { cleanupCache, getTemplates } from '../utils'
+import { getTemplates } from '../utils'
 
 const listCommand = new Command('list')
 	.description('List available templates')
@@ -16,7 +21,7 @@ const listCommand = new Command('list')
 			let filteredTemplates = templates
 
 			if (options.category) {
-				filteredTemplates = templates.filter((t) => t.category === options.cagetTemplates())
+				filteredTemplates = templates.filter((t) => t.category === options.category)
 			}
 
 			if (options.tag) {
@@ -49,7 +54,7 @@ const listCommand = new Command('list')
 			)
 
 			Object.entries(templatesByCategory).forEach(([category, categoryTemplates]) => {
-				consola.log(`${consola.log(category.toUpperCase())}:`)
+				consola.log(`${category.toUpperCase()}:`)
 
 				categoryTemplates.forEach((template, index) => {
 					consola.log(`  ${index + 1}. ${template.name}`)
@@ -103,8 +108,6 @@ const listCommand = new Command('list')
 		} catch (error) {
 			consola.error(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`)
 			process.exit(1)
-		} finally {
-			await cleanupCache()
 		}
 	})
 

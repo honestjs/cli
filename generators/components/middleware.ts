@@ -1,3 +1,7 @@
+/**
+ * Generates a middleware component (components/<name>/<name>.middleware.ts).
+ */
+
 import path from 'path'
 import { BaseGenerator, GenerateOptions, GenerateResult } from '../base'
 

@@ -1,3 +1,7 @@
+/**
+ * Generates a service with CRUD methods (create, findAll, findById, update, delete).
+ */
+
 import path from 'path'
 import { BaseGenerator, GenerateOptions, GenerateResult } from '../base'
 

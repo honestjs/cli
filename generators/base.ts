@@ -1,3 +1,8 @@
+/**
+ * Base generator for HonestJS schematics. Provides path resolution, pluralization,
+ * and writeFile with overwrite protection (--force to overwrite).
+ */
+
 import fs from 'fs-extra'
 import path from 'path'
 import pluralize from 'pluralize'
@@ -8,6 +13,7 @@ export interface GenerateOptions {
 	flat?: boolean
 	skipImport?: boolean
 	export?: boolean
+	force?: boolean
 }
 
 export interface GenerateResult {
@@ -26,6 +32,7 @@ export abstract class BaseGenerator {
 
 	abstract generate(): Promise<GenerateResult>
 
+	/** Resolves output path: --path, or src/modules/<plural>, or src (flat). */
 	protected getTargetPath(): string {
 		if (this.options.path) {
 			return path.join(this.projectRoot, this.options.path)
@@ -46,7 +53,11 @@ export abstract class BaseGenerator {
 		await fs.ensureDir(dir)
 	}
 
+	/** Writes file. Throws if file exists and options.force is not set. */
 	protected async writeFile(filePath: string, content: string): Promise<void> {
+		if (!this.options.force && (await fs.pathExists(filePath))) {
+			throw new Error(`File already exists: ${filePath}. Use --force to overwrite.`)
+		}
 		await fs.writeFile(filePath, content, 'utf-8')
 	}
 

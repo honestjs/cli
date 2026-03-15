@@ -1,3 +1,9 @@
+/**
+ * `honestjs generate` (alias: g) - Generates HonestJS files from schematics.
+ * Schematics: controller, service, module, view, middleware, guard, filter, pipe.
+ * Use --force to overwrite existing files.
+ */
+
 import { Command } from 'commander'
 import { consola } from 'consola'
 import { generateFilter } from '../generators/components/filter'
@@ -24,7 +30,7 @@ const generateCommand = new Command('generate')
 	.argument('<name>', 'The name of the generated item')
 	.option('-p, --path <path>', 'Specify the path where the file should be created')
 	.option('-f, --flat', 'Create files in a flat structure')
-
+	.option('--force', 'Overwrite existing files without prompting')
 	.option('--skip-import', 'Skip importing the generated item')
 	.option('--export', 'Export the generated item')
 	.action(async (schematic, name, options) => {
@@ -36,7 +42,8 @@ const generateCommand = new Command('generate')
 				path: options.path,
 				flat: options.flat,
 				skipImport: options.skipImport,
-				export: options.export
+				export: options.export,
+				force: options.force
 			}
 
 			let result
