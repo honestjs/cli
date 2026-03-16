@@ -32,7 +32,8 @@ hnjs new <project-name> [options]
 
 **Options**
 
-- `-t, --template <template>`: Template name (e.g., `barebone`, `blank`, `mvc`, `api-starter`) or local path (`./path`, `~/path`).
+- `-t, --template <template>`: Template name (e.g., `barebone`, `blank`, `mvc`, `api-starter`) or local path (`./path`,
+  `~/path`).
 - `-p, --package-manager <manager>`: Choose a package manager (e.g., `bun`, `npm`, `yarn`, `pnpm`).
 - `--typescript`: Use TypeScript in the project.
 - `--no-typescript`: Do not use TypeScript in the project.
@@ -50,7 +51,8 @@ hnjs new <project-name> [options]
 - `--offline`: Use cached templates only (no network).
 - `--refresh-templates`: Force refresh template cache before use.
 
-**Local templates:** Use a local path for `--template` to scaffold from a local templates repo or single template directory. Examples: `honestjs new my-app -t ./templates/api-starter`, `honestjs new my-app -t ~/company/templates -y`.
+**Local templates:** Use a local path for `--template` to scaffold from a local templates repo or single template
+directory. Examples: `honestjs new my-app -t ./templates/api-starter`, `honestjs new my-app -t ~/company/templates -y`.
 
 ### `list`
 
@@ -84,7 +86,8 @@ honestjs info --local ./templates
 
 ### `doctor`
 
-The `doctor` command diagnoses your environment: runtime (Node/Bun), Git, package managers, template cache, and network connectivity.
+The `doctor` command diagnoses your environment: runtime (Node/Bun), Git, package managers, template cache, and network
+connectivity.
 
 ```bash
 honestjs doctor
