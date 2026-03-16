@@ -88,7 +88,9 @@ describe('getLocalTemplatesRoot', () => {
 		const result = getLocalTemplatesRoot(apiStarterPath)
 		expect(result).not.toBeNull()
 		expect(result!.mode).toBe('single')
-		expect(result!.templateName).toBe('api-starter')
+		if (result && result.mode === 'single') {
+			expect(result.templateName).toBe('api-starter')
+		}
 		expect(result!.root).toBe(apiStarterPath)
 	})
 
