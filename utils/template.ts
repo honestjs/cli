@@ -1,14 +1,53 @@
 /**
  * Template utilities: registry loading, template prompts, and project scaffolding.
- * Templates are fetched from honestjs/templates (via cache) and copied with transforms.
+ * Templates are fetched from honestjs/templates (via cache) or from a local path.
  */
 
 import { consola } from 'consola'
 import fs from 'fs-extra'
+import os from 'os'
 import path from 'path'
 import type { PromptObject } from 'prompts'
 import { getTemplateCache } from './cache'
 import { applyProjectConfiguration, applyTemplateTransforms, copySharedConfigs } from './transforms'
+
+/** Returns true if the value looks like a local filesystem path. */
+export function isLocalTemplatePath(value: string): boolean {
+	if (!value || typeof value !== 'string') return false
+	const trimmed = value.trim()
+	return (
+		trimmed.startsWith('./') ||
+		trimmed.startsWith('../') ||
+		trimmed.startsWith('~/') ||
+		trimmed.startsWith('~\\') ||
+		path.isAbsolute(trimmed)
+	)
+}
+
+/** Resolves a local path: expands ~ and converts to absolute path. */
+export function resolveLocalTemplatePath(rawPath: string): string {
+	const expanded = rawPath.startsWith('~') ? path.join(os.homedir(), rawPath.slice(1)) : rawPath
+	return path.resolve(process.cwd(), expanded)
+}
+
+export type LocalTemplatesRoot = { root: string; mode: 'repo' } | { root: string; mode: 'single'; templateName: string }
+
+/** Detects whether path is a templates repo root or a single template dir. Returns null if invalid. */
+export function getLocalTemplatesRoot(resolvedPath: string): LocalTemplatesRoot | null {
+	if (!fs.existsSync(resolvedPath) || !fs.statSync(resolvedPath).isDirectory()) {
+		return null
+	}
+	const hasTemplatesJson = fs.existsSync(path.join(resolvedPath, 'templates.json'))
+	if (hasTemplatesJson) {
+		return { root: resolvedPath, mode: 'repo' }
+	}
+	const hasTemplateJson = fs.existsSync(path.join(resolvedPath, 'template.json'))
+	const hasFilesDir = fs.existsSync(path.join(resolvedPath, 'files'))
+	if (hasTemplateJson && hasFilesDir) {
+		return { root: resolvedPath, mode: 'single', templateName: path.basename(resolvedPath) }
+	}
+	return null
+}
 
 export interface Template {
 	name: string
@@ -44,11 +83,48 @@ export interface ProjectConfig {
 export interface GetTemplatesOptions {
 	offline?: boolean
 	force?: boolean
+	/** When set, load templates from local path instead of cache. */
+	localPath?: string
+	/** When set (e.g. for local templates), use this as templates root instead of cache. */
+	templatesRoot?: string
 }
 
-/** Loads the template registry (templates.json) from the cache and returns template metadata. */
+/** Loads the template registry (templates.json) from the cache or local path and returns template metadata. */
 export async function getTemplates(options?: GetTemplatesOptions): Promise<Template[]> {
-	const { offline, force } = options ?? {}
+	const { offline, force, localPath } = options ?? {}
+
+	if (localPath) {
+		const resolved = resolveLocalTemplatePath(localPath)
+		const info = getLocalTemplatesRoot(resolved)
+		if (!info) {
+			throw new Error(
+				`Invalid local template path: '${localPath}'. Expected a directory with templates.json (repo root) or template.json + files/ (single template).`
+			)
+		}
+		if (info.mode === 'repo') {
+			const registryPath = path.join(info.root, 'templates.json')
+			const registry: TemplateRegistry = await fs.readJson(registryPath)
+			return Object.entries(registry.templates).map(([key, template]) => ({
+				...template,
+				name: key,
+				path: template.path || key
+			}))
+		}
+		// Single template mode
+		const templateJsonPath = path.join(info.root, 'template.json')
+		const templateConfig = await fs.readJson(templateJsonPath)
+		return [
+			{
+				name: info.templateName,
+				description: templateConfig.description ?? 'Local template',
+				path: '.',
+				category: 'local',
+				version: templateConfig.version,
+				author: templateConfig.author
+			}
+		]
+	}
+
 	const cacheDir = await getTemplateCache(force, offline)
 	const registryPath = path.join(cacheDir, 'templates.json')
 
@@ -69,20 +145,27 @@ export async function getTemplatePrompts(
 	templateName: string,
 	options?: GetTemplatesOptions
 ): Promise<PromptObject[] | null> {
-	const { offline, force } = options ?? {}
-	const cacheDir = await getTemplateCache(force, offline)
-	const templates = await getTemplates({ offline, force })
-	const template = templates.find((t) => t.name === templateName)
+	const { offline, force, localPath } = options ?? {}
 
-	if (!template) {
-		return null
+	let templatesRoot: string
+	if (localPath) {
+		const resolved = resolveLocalTemplatePath(localPath)
+		const info = getLocalTemplatesRoot(resolved)
+		if (!info) return null
+		templatesRoot = info.root
+	} else {
+		templatesRoot = await getTemplateCache(force, offline)
 	}
 
+	const templates = await getTemplates(options)
+	const template = templates.find((t) => t.name === templateName)
+	if (!template) return null
+
 	let templateDir: string
-	if (template.path.startsWith('templates/')) {
-		templateDir = path.join(cacheDir, template.path)
+	if (template.path === '.' || template.path.startsWith('templates/')) {
+		templateDir = path.join(templatesRoot, template.path)
 	} else {
-		templateDir = path.join(cacheDir, 'templates', template.path)
+		templateDir = path.join(templatesRoot, 'templates', template.path)
 	}
 
 	const promptsPath = path.join(templateDir, 'prompts.js')
@@ -108,8 +191,8 @@ export async function copyTemplate(
 	config?: Partial<ProjectConfig>,
 	options?: GetTemplatesOptions
 ): Promise<void> {
-	const { offline, force } = options ?? {}
-	const templates = await getTemplates({ offline, force })
+	const { offline, force, localPath, templatesRoot } = options ?? {}
+	const templates = await getTemplates(options)
 	const template = templates.find((t) => t.name === templateName)
 
 	if (!template) {
@@ -117,16 +200,30 @@ export async function copyTemplate(
 	}
 
 	const projectPath = path.join(process.cwd(), projectName)
-	const cacheDir = await getTemplateCache(force, offline)
+	let root: string
+	if (templatesRoot) {
+		root = templatesRoot
+	} else if (localPath) {
+		const resolved = resolveLocalTemplatePath(localPath)
+		const info = getLocalTemplatesRoot(resolved)
+		if (!info) {
+			throw new Error(
+				`Invalid local template path: '${localPath}'. Expected a directory with templates.json (repo root) or template.json + files/ (single template).`
+			)
+		}
+		root = info.root
+	} else {
+		root = await getTemplateCache(force, offline)
+	}
 
 	try {
 		consola.info(`Creating project from template '${templateName}'...`)
 
 		let templateDir: string
-		if (template.path.startsWith('templates/')) {
-			templateDir = path.join(cacheDir, template.path)
+		if (template.path === '.' || template.path.startsWith('templates/')) {
+			templateDir = path.join(root, template.path)
 		} else {
-			templateDir = path.join(cacheDir, 'templates', template.path)
+			templateDir = path.join(root, 'templates', template.path)
 		}
 
 		consola.log(`Using template from: ${templateDir}`)
@@ -150,9 +247,9 @@ export async function copyTemplate(
 				...config
 			}
 
-			await applyTemplateTransforms(projectPath, template, mergedConfig, cacheDir)
+			await applyTemplateTransforms(projectPath, template, mergedConfig, root)
 
-			await copySharedConfigs(projectPath, mergedConfig, cacheDir)
+			await copySharedConfigs(projectPath, mergedConfig, root)
 		} else {
 			await fs.copy(templateDir, projectPath)
 			await applyProjectConfiguration(projectPath, config)

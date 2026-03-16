@@ -32,7 +32,7 @@ hnjs new <project-name> [options]
 
 **Options**
 
-- `-t, --template <template>`: Specify the template to use (e.g., `barebone`, `blank`, `mvc`).
+- `-t, --template <template>`: Template name (e.g., `barebone`, `blank`, `mvc`, `api-starter`) or local path (`./path`, `~/path`).
 - `-p, --package-manager <manager>`: Choose a package manager (e.g., `bun`, `npm`, `yarn`, `pnpm`).
 - `--typescript`: Use TypeScript in the project.
 - `--no-typescript`: Do not use TypeScript in the project.
@@ -50,6 +50,8 @@ hnjs new <project-name> [options]
 - `--offline`: Use cached templates only (no network).
 - `--refresh-templates`: Force refresh template cache before use.
 
+**Local templates:** Use a local path for `--template` to scaffold from a local templates repo or single template directory. Examples: `honestjs new my-app -t ./templates/api-starter`, `honestjs new my-app -t ~/company/templates -y`.
+
 ### `list`
 
 The `list` command displays all available templates that can be used to create a new project.
@@ -63,6 +65,7 @@ honestjs list [options]
 - `-j, --json`: Output the list of templates in JSON format.
 - `-c, --category <category>`: Filter templates by category.
 - `-t, --tag <tag>`: Filter templates by tag.
+- `-l, --local <path>`: List templates from a local path (repo root or single template).
 - `--offline`: Use cached templates only (no network).
 - `--refresh-templates`: Force refresh template cache before use.
 
@@ -72,7 +75,12 @@ The `info` command shows information about the CLI, templates, and your environm
 
 ```bash
 honestjs info
+honestjs info --local ./templates
 ```
+
+**Options**
+
+- `-l, --local <path>`: Show templates from a local path instead of remote.
 
 ### `doctor`
 

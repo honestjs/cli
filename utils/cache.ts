@@ -1,6 +1,7 @@
 /**
  * Template cache: downloads honestjs/templates to a stable temp dir and reuses it.
  * Set HONESTJS_TEMPLATES_FORCE=1 to force a fresh download.
+ * When localPath is provided, returns the resolved local path (no download).
  */
 
 import { downloadTemplate } from '@bluwy/giget-core'
@@ -12,8 +13,16 @@ let cacheDir: string | null = null
 
 const CACHE_DIR_NAME = 'honestjs-templates'
 
-/** Returns the template cache directory, downloading templates if needed. Reuses cache unless force=true. When offline=true, uses existing cache only (force overrides offline). */
-export async function getTemplateCache(force?: boolean, offline?: boolean): Promise<string> {
+function resolveLocalPath(rawPath: string): string {
+	const expanded = rawPath.startsWith('~') ? path.join(os.homedir(), rawPath.slice(1)) : rawPath
+	return path.resolve(process.cwd(), expanded)
+}
+
+/** Returns the template cache directory, downloading templates if needed. Reuses cache unless force=true. When offline=true, uses existing cache only (force overrides offline). When localPath is provided, returns the resolved local path immediately (no download). */
+export async function getTemplateCache(force?: boolean, offline?: boolean, localPath?: string): Promise<string> {
+	if (localPath) {
+		return resolveLocalPath(localPath)
+	}
 	const forceRefresh = force ?? process.env.HONESTJS_TEMPLATES_FORCE === '1'
 	const stableCacheDir = path.join(os.tmpdir(), CACHE_DIR_NAME)
 

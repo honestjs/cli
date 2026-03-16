@@ -12,15 +12,16 @@ const listCommand = new Command('list')
 	.option('-j, --json', 'Output in JSON format')
 	.option('-c, --category <category>', 'Filter by category')
 	.option('-t, --tag <tag>', 'Filter by tag')
+	.option('-l, --local <path>', 'List templates from a local path (repo root or single template)')
 	.option('--offline', 'Use cached templates only (no network)')
 	.option('--refresh-templates', 'Force refresh template cache before use')
 	.action(async (options) => {
 		try {
-			consola.start('Fetching templates...')
-			const templates = await getTemplates({
-				offline: options.offline,
-				force: options.refreshTemplates
-			})
+			const useLocal = Boolean(options.local)
+			consola.start(useLocal ? 'Loading local templates...' : 'Fetching templates...')
+			const templates = await getTemplates(
+				useLocal ? { localPath: options.local } : { offline: options.offline, force: options.refreshTemplates }
+			)
 			consola.success('Templates fetched successfully!')
 
 			let filteredTemplates = templates
@@ -77,7 +78,9 @@ const listCommand = new Command('list')
 						consola.info(`     Tags: ${template.tags.join(', ')}`)
 					}
 
-					consola.info(`     Template: honestjs/templates/${template.path}`)
+					consola.info(
+						`     Template: ${useLocal ? `local (${options.local})` : `honestjs/templates/${template.path}`}`
+					)
 					consola.log('')
 				})
 			})
@@ -102,9 +105,11 @@ const listCommand = new Command('list')
 
 			consola.info('Usage:')
 			consola.log('  honestjs new <project-name> --template <template-name>')
+			consola.log('  honestjs new <project-name> --template ./path/to/template (local)')
 			consola.log('  honestjs new <project-name> (interactive mode)')
 			consola.log('  honestjs list --category <category>')
 			consola.log('  honestjs list --tag <tag>')
+			consola.log('  honestjs list --local <path>')
 			consola.log('')
 			consola.info('All templates support:')
 			consola.log('  • TypeScript, ESLint, Prettier, Docker, Git')

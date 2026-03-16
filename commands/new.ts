@@ -7,12 +7,25 @@ import { Command } from 'commander'
 import { consola } from 'consola'
 import fs from 'fs-extra'
 import prompts, { PromptObject } from 'prompts'
-import { copyTemplate, getTemplatePrompts, getTemplates, type ProjectConfig, type Template } from '../utils'
+import {
+	copyTemplate,
+	getLocalTemplatesRoot,
+	getTemplatePrompts,
+	getTemplates,
+	isLocalTemplatePath,
+	resolveLocalTemplatePath,
+	type GetTemplatesOptions,
+	type ProjectConfig,
+	type Template
+} from '../utils'
 
 const newCommand = new Command('new')
 	.description('Create a new honestjs project')
 	.argument('[project-name]', 'Name of the project')
-	.option('-t, --template <template>', 'Template to use (barebone, blank, mvc)')
+	.option(
+		'-t, --template <template>',
+		'Template name (barebone, blank, mvc, api-starter) or local path (./path, ~/path)'
+	)
 	.option('-p, --package-manager <manager>', 'Package manager to use (bun, npm, yarn, pnpm)')
 	.option('--typescript', 'Use TypeScript')
 	.option('--no-typescript', 'Skip TypeScript')
@@ -43,11 +56,30 @@ const newCommand = new Command('new')
 		}
 
 		try {
-			const templateOptions = { offline: options.offline, force: options.refreshTemplates }
+			const useLocalPath = isLocalTemplatePath(options.template || '')
+			let templateOptions: { offline?: boolean; force?: boolean; localPath?: string; templatesRoot?: string }
+
+			if (useLocalPath) {
+				const resolved = resolveLocalTemplatePath(options.template!)
+				const info = getLocalTemplatesRoot(resolved)
+				if (!info) {
+					consola.error(
+						`Invalid local template path: '${options.template}'. Expected a directory with templates.json (repo root) or template.json + files/ (single template).`
+					)
+					process.exit(1)
+				}
+				templateOptions = { localPath: resolved, templatesRoot: info.root }
+				if (info.mode === 'single') {
+					config.template = info.templateName
+				}
+			} else {
+				templateOptions = { offline: options.offline, force: options.refreshTemplates }
+			}
+
 			const templates = await getTemplates(templateOptions)
 
 			if (options.yes) {
-				config = createDefaultConfig(config, templates)
+				config = createDefaultConfig(config, templates, useLocalPath)
 			} else {
 				config = await promptForConfiguration(config, templates, templateOptions)
 			}
@@ -65,8 +97,18 @@ const newCommand = new Command('new')
 	})
 
 /** Builds config with defaults when --yes is used. Validates template exists. */
-function createDefaultConfig(initialConfig: ProjectConfig, templates: Template[]): ProjectConfig {
-	const template = initialConfig.template || 'barebone'
+function createDefaultConfig(
+	initialConfig: ProjectConfig,
+	templates: Template[],
+	useLocalPath?: boolean
+): ProjectConfig {
+	// For local repo mode + --yes: initialConfig.template is the path, use first template
+	// For local single template: initialConfig.template is already the template name
+	// For external: use initialConfig.template or 'barebone'
+	const template =
+		useLocalPath && templates.length > 0 && !templates.find((t) => t.name === initialConfig.template)
+			? templates[0].name
+			: initialConfig.template || 'barebone'
 	const defaultConfig = {
 		...initialConfig,
 		name: initialConfig.name || 'honestjs-project',
@@ -99,7 +141,7 @@ function createDefaultConfig(initialConfig: ProjectConfig, templates: Template[]
 async function promptForConfiguration(
 	initialConfig: ProjectConfig,
 	templates: Template[],
-	templateOptions?: { offline?: boolean; force?: boolean }
+	templateOptions?: GetTemplatesOptions
 ): Promise<ProjectConfig> {
 	let config = { ...initialConfig }
 	const onCancel = () => {
