@@ -6,6 +6,7 @@
 
 import { Command } from 'commander'
 import { consola } from 'consola'
+import type { GenerateOptions } from '../generators/base'
 import { generateFilter } from '../generators/components/filter'
 import { generateGuard } from '../generators/components/guard'
 import { generateMiddleware } from '../generators/components/middleware'
@@ -14,14 +15,6 @@ import { generateController } from '../generators/core/controller'
 import { generateModule } from '../generators/core/module'
 import { generateService } from '../generators/core/service'
 import { generateView } from '../generators/core/view'
-
-interface GenerateOptions {
-	name: string
-	path?: string
-	flat?: boolean
-	skipImport?: boolean
-	export?: boolean
-}
 
 const generateCommand = new Command('generate')
 	.alias('g')
@@ -96,7 +89,7 @@ const generateCommand = new Command('generate')
 					consola.log('  honestjs g controller user    -> modules/users/users.controller.ts')
 					consola.log('  honestjs g controller users   -> modules/users/users.controller.ts')
 					consola.log('  honestjs g service user       -> modules/users/users.service.ts')
-					consola.log('  honestjs g view users         -> modules/users/views/users.view.tsx')
+					consola.log('  honestjs g view users         -> modules/users/users.view.tsx')
 					consola.log('  honestjs g middleware logger  -> components/logger/logger.middleware.ts')
 					consola.log('  honestjs g guard auth         -> components/auth/auth.guard.ts')
 					consola.log('  honestjs g filter notfound    -> components/notfound/notfound.filter.ts')

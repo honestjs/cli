@@ -27,8 +27,8 @@ class ViewGenerator extends BaseGenerator {
 
 		if (!this.options.skipImport) {
 			const importPath = this.options.flat
-				? `./views/${this.getFileName()}.view`
-				: `./modules/${this.getPluralFileName()}/views/${this.getFileName()}.view`
+				? `./${this.getFileName()}.view`
+				: `./modules/${this.getPluralFileName()}/${this.getFileName()}.view`
 
 			imports.push(`import ${this.getViewName()} from '${importPath}';`)
 		}

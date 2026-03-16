@@ -21,11 +21,11 @@ const listCommand = new Command('list')
 			let filteredTemplates = templates
 
 			if (options.category) {
-				filteredTemplates = templates.filter((t) => t.category === options.category)
+				filteredTemplates = filteredTemplates.filter((t) => t.category === options.category)
 			}
 
 			if (options.tag) {
-				filteredTemplates = templates.filter((t) => t.tags?.includes(options.tag))
+				filteredTemplates = filteredTemplates.filter((t) => t.tags?.includes(options.tag))
 			}
 
 			if (options.json) {

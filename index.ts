@@ -7,7 +7,7 @@
 
 import chalk from 'chalk'
 import { Command } from 'commander'
-import { readFileSync } from 'fs'
+import { existsSync, readFileSync } from 'fs'
 import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
 import { generateCommand } from './commands/generate.js'
@@ -16,7 +16,9 @@ import { listCommand } from './commands/list.js'
 import { newCommand } from './commands/new.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'))
+const pkgPath = [join(__dirname, 'package.json'), join(__dirname, '..', 'package.json')].find((p) => existsSync(p))
+if (!pkgPath) throw new Error('Could not find CLI package.json')
+const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
 
 const program = new Command()
 

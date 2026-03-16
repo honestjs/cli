@@ -87,6 +87,7 @@ honestjs generate <schematic> <name> [options]
 
 - `-p, --path <path>`: Specify the path where the file should be created.
 - `-f, --flat`: Create the file in a flat structure (without a dedicated folder).
+- `--force`: Overwrite existing files without prompting.
 - `--skip-import`: Do not import the generated item into other files.
 - `--export`: Export the generated item.
 
