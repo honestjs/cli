@@ -35,7 +35,9 @@ export async function getTemplateCache(force?: boolean): Promise<string> {
 		cacheDir = dir
 		return cacheDir
 	} catch (error) {
-		throw new Error(`Failed to download templates: ${error instanceof Error ? error.message : 'Unknown error'}`)
+		throw new Error(`Failed to download templates: ${error instanceof Error ? error.message : 'Unknown error'}`, {
+			cause: error
+		})
 	}
 }
 

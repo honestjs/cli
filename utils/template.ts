@@ -153,7 +153,8 @@ export async function copyTemplate(
 		throw new Error(
 			`Failed to create project from template '${templateName}': ${
 				error instanceof Error ? error.message : 'Unknown error'
-			}`
+			}`,
+			{ cause: error }
 		)
 	}
 }
