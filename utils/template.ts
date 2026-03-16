@@ -41,9 +41,15 @@ export interface ProjectConfig {
 	[key: string]: unknown
 }
 
+export interface GetTemplatesOptions {
+	offline?: boolean
+	force?: boolean
+}
+
 /** Loads the template registry (templates.json) from the cache and returns template metadata. */
-export async function getTemplates(): Promise<Template[]> {
-	const cacheDir = await getTemplateCache()
+export async function getTemplates(options?: GetTemplatesOptions): Promise<Template[]> {
+	const { offline, force } = options ?? {}
+	const cacheDir = await getTemplateCache(force, offline)
 	const registryPath = path.join(cacheDir, 'templates.json')
 
 	if (fs.existsSync(registryPath)) {
@@ -59,9 +65,13 @@ export async function getTemplates(): Promise<Template[]> {
 }
 
 /** Loads template-specific prompts (prompts.js) for interactive configuration. */
-export async function getTemplatePrompts(templateName: string): Promise<PromptObject[] | null> {
-	const cacheDir = await getTemplateCache()
-	const templates = await getTemplates()
+export async function getTemplatePrompts(
+	templateName: string,
+	options?: GetTemplatesOptions
+): Promise<PromptObject[] | null> {
+	const { offline, force } = options ?? {}
+	const cacheDir = await getTemplateCache(force, offline)
+	const templates = await getTemplates({ offline, force })
 	const template = templates.find((t) => t.name === templateName)
 
 	if (!template) {
@@ -95,9 +105,11 @@ export async function getTemplatePrompts(templateName: string): Promise<PromptOb
 export async function copyTemplate(
 	templateName: string,
 	projectName: string,
-	config?: Partial<ProjectConfig>
+	config?: Partial<ProjectConfig>,
+	options?: GetTemplatesOptions
 ): Promise<void> {
-	const templates = await getTemplates()
+	const { offline, force } = options ?? {}
+	const templates = await getTemplates({ offline, force })
 	const template = templates.find((t) => t.name === templateName)
 
 	if (!template) {
@@ -105,7 +117,7 @@ export async function copyTemplate(
 	}
 
 	const projectPath = path.join(process.cwd(), projectName)
-	const cacheDir = await getTemplateCache()
+	const cacheDir = await getTemplateCache(force, offline)
 
 	try {
 		consola.info(`Creating project from template '${templateName}'...`)

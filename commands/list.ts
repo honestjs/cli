@@ -12,10 +12,15 @@ const listCommand = new Command('list')
 	.option('-j, --json', 'Output in JSON format')
 	.option('-c, --category <category>', 'Filter by category')
 	.option('-t, --tag <tag>', 'Filter by tag')
+	.option('--offline', 'Use cached templates only (no network)')
+	.option('--refresh-templates', 'Force refresh template cache before use')
 	.action(async (options) => {
 		try {
 			consola.start('Fetching templates...')
-			const templates = await getTemplates()
+			const templates = await getTemplates({
+				offline: options.offline,
+				force: options.refreshTemplates
+			})
 			consola.success('Templates fetched successfully!')
 
 			let filteredTemplates = templates

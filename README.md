@@ -47,6 +47,8 @@ hnjs new <project-name> [options]
 - `--install`: Install dependencies after creating the project.
 - `--no-install`: Do not install dependencies.
 - `-y, --yes`: Skip all prompts and use default settings.
+- `--offline`: Use cached templates only (no network).
+- `--refresh-templates`: Force refresh template cache before use.
 
 ### `list`
 
@@ -61,6 +63,8 @@ honestjs list [options]
 - `-j, --json`: Output the list of templates in JSON format.
 - `-c, --category <category>`: Filter templates by category.
 - `-t, --tag <tag>`: Filter templates by tag.
+- `--offline`: Use cached templates only (no network).
+- `--refresh-templates`: Force refresh template cache before use.
 
 ### `info`
 
@@ -68,6 +72,14 @@ The `info` command shows information about the CLI, templates, and your environm
 
 ```bash
 honestjs info
+```
+
+### `doctor`
+
+The `doctor` command diagnoses your environment: runtime (Node/Bun), Git, package managers, template cache, and network connectivity.
+
+```bash
+honestjs doctor
 ```
 
 ### `generate`
@@ -88,6 +100,7 @@ honestjs generate <schematic> <name> [options]
 - `-p, --path <path>`: Specify the path where the file should be created.
 - `-f, --flat`: Create the file in a flat structure (without a dedicated folder).
 - `--force`: Overwrite existing files without prompting.
+- `--dry-run`: Show what would be created without writing files.
 - `--skip-import`: Do not import the generated item into other files.
 - `--export`: Export the generated item.
 

@@ -10,6 +10,7 @@ import { Command } from 'commander'
 import { existsSync, readFileSync } from 'fs'
 import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
+import { doctorCommand } from './commands/doctor.js'
 import { generateCommand } from './commands/generate.js'
 import { infoCommand } from './commands/info.js'
 import { listCommand } from './commands/list.js'
@@ -27,6 +28,7 @@ program.name('honestjs').description('CLI tool for scaffolding honestjs projects
 program.addCommand(newCommand)
 program.addCommand(listCommand)
 program.addCommand(infoCommand)
+program.addCommand(doctorCommand)
 program.addCommand(generateCommand)
 
 try {

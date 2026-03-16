@@ -6,6 +6,7 @@
 
 import { Command } from 'commander'
 import { consola } from 'consola'
+import fs from 'fs-extra'
 import type { GenerateOptions } from '../generators/base'
 import { generateFilter } from '../generators/components/filter'
 import { generateGuard } from '../generators/components/guard'
@@ -24,11 +25,12 @@ const generateCommand = new Command('generate')
 	.option('-p, --path <path>', 'Specify the path where the file should be created')
 	.option('-f, --flat', 'Create files in a flat structure')
 	.option('--force', 'Overwrite existing files without prompting')
+	.option('--dry-run', 'Show what would be created without writing files')
 	.option('--skip-import', 'Skip importing the generated item')
 	.option('--export', 'Export the generated item')
 	.action(async (schematic, name, options) => {
 		try {
-			consola.start('Generating files...')
+			consola.start(options.dryRun ? 'Planning generation...' : 'Generating files...')
 
 			const generateOptions: GenerateOptions = {
 				name,
@@ -36,7 +38,8 @@ const generateCommand = new Command('generate')
 				flat: options.flat,
 				skipImport: options.skipImport,
 				export: options.export,
-				force: options.force
+				force: options.force,
+				dryRun: options.dryRun
 			}
 
 			let result
@@ -97,12 +100,14 @@ const generateCommand = new Command('generate')
 					process.exit(1)
 			}
 
-			consola.success('Files generated successfully!')
+			consola.success(options.dryRun ? 'Dry run complete.' : 'Files generated successfully!')
 
-			consola.info('\n📁 Generated files:')
-			result.files.forEach((file: string) => {
-				consola.log(`  ✓ ${file}`)
-			})
+			consola.info(options.dryRun ? '\n📁 Would create:' : '\n📁 Generated files:')
+			for (const file of result.files) {
+				const exists = await fs.pathExists(file)
+				const suffix = options.dryRun && exists ? ' (exists, use --force to overwrite)' : ''
+				consola.log(`  ✓ ${file}${suffix}`)
+			}
 
 			if (result.imports.length > 0) {
 				consola.info('\n📦 Import statements to add:')

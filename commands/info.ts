@@ -40,7 +40,8 @@ const infoCommand = new Command('info').description('Show CLI and template infor
 			// CLI package not found, use unknown
 		}
 		consola.log(`CLI Version: ${packageJson.version}`)
-		consola.log(`Runtime: Bun`)
+		const runtime = typeof (process.versions as { bun?: string })?.bun !== 'undefined' ? 'Bun' : 'Node.js'
+		consola.log(`Runtime: ${runtime}`)
 		consola.log(`Templates Repository: honestjs/templates`)
 		consola.log('')
 

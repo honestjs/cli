@@ -27,6 +27,8 @@ const newCommand = new Command('new')
 	.option('--install', 'Install dependencies after creation')
 	.option('--no-install', 'Skip dependency installation')
 	.option('-y, --yes', 'Skip prompts and use defaults')
+	.option('--offline', 'Use cached templates only (no network)')
+	.option('--refresh-templates', 'Force refresh template cache before use')
 	.action(async (projectName, options) => {
 		let config: ProjectConfig = {
 			name: projectName || '',
@@ -41,18 +43,19 @@ const newCommand = new Command('new')
 		}
 
 		try {
-			const templates = await getTemplates()
+			const templateOptions = { offline: options.offline, force: options.refreshTemplates }
+			const templates = await getTemplates(templateOptions)
 
 			if (options.yes) {
 				config = createDefaultConfig(config, templates)
 			} else {
-				config = await promptForConfiguration(config, templates)
+				config = await promptForConfiguration(config, templates, templateOptions)
 			}
 
 			validateProjectConfig(config)
 
 			consola.start('Creating project...')
-			await copyTemplate(config.template, config.name, config)
+			await copyTemplate(config.template, config.name, config, templateOptions)
 			consola.success('Project created successfully!')
 
 			showNextSteps(config)
@@ -93,8 +96,16 @@ function createDefaultConfig(initialConfig: ProjectConfig, templates: Template[]
 }
 
 /** Runs interactive prompts: project name, template, template-specific options, then general options. */
-async function promptForConfiguration(initialConfig: ProjectConfig, templates: Template[]): Promise<ProjectConfig> {
+async function promptForConfiguration(
+	initialConfig: ProjectConfig,
+	templates: Template[],
+	templateOptions?: { offline?: boolean; force?: boolean }
+): Promise<ProjectConfig> {
 	let config = { ...initialConfig }
+	const onCancel = () => {
+		consola.info('Cancelled.')
+		process.exit(0)
+	}
 
 	const questions: PromptObject[] = [
 		{
@@ -123,13 +134,16 @@ async function promptForConfiguration(initialConfig: ProjectConfig, templates: T
 		}
 	]
 
-	const answers = await prompts(questions.filter((q: PromptObject) => q.type !== null))
+	const answers = await prompts(
+		questions.filter((q: PromptObject) => q.type !== null),
+		{ onCancel }
+	)
 	config = { ...config, ...answers }
 
-	const templatePrompts = await getTemplatePrompts(config.template)
+	const templatePrompts = await getTemplatePrompts(config.template, templateOptions)
 	if (templatePrompts && templatePrompts.length > 0) {
 		consola.info(`\n📋 Configuring ${config.template} template...`)
-		const templateAnswers = await prompts(templatePrompts)
+		const templateAnswers = await prompts(templatePrompts, { onCancel })
 		config = { ...config, ...templateAnswers }
 	}
 
@@ -196,7 +210,10 @@ async function promptForConfiguration(initialConfig: ProjectConfig, templates: T
 		}
 	]
 
-	const generalAnswers = await prompts(generalQuestions.filter((q: PromptObject) => q.type !== null))
+	const generalAnswers = await prompts(
+		generalQuestions.filter((q: PromptObject) => q.type !== null),
+		{ onCancel }
+	)
 	return { ...config, ...generalAnswers }
 }
 

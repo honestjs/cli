@@ -12,8 +12,8 @@ let cacheDir: string | null = null
 
 const CACHE_DIR_NAME = 'honestjs-templates'
 
-/** Returns the template cache directory, downloading templates if needed. Reuses cache unless force=true. */
-export async function getTemplateCache(force?: boolean): Promise<string> {
+/** Returns the template cache directory, downloading templates if needed. Reuses cache unless force=true. When offline=true, uses existing cache only (force overrides offline). */
+export async function getTemplateCache(force?: boolean, offline?: boolean): Promise<string> {
 	const forceRefresh = force ?? process.env.HONESTJS_TEMPLATES_FORCE === '1'
 	const stableCacheDir = path.join(os.tmpdir(), CACHE_DIR_NAME)
 
@@ -23,8 +23,16 @@ export async function getTemplateCache(force?: boolean): Promise<string> {
 
 	// Reuse existing cache when not forcing refresh
 	if (!forceRefresh && fs.existsSync(stableCacheDir)) {
-		cacheDir = stableCacheDir
-		return cacheDir
+		const registryPath = path.join(stableCacheDir, 'templates.json')
+		if (fs.existsSync(registryPath)) {
+			cacheDir = stableCacheDir
+			return cacheDir
+		}
+	}
+
+	// Offline mode: use cache only, no download (force overrides offline)
+	if (offline && !forceRefresh) {
+		throw new Error('Templates not found. Run without --offline first to download templates (e.g. honestjs list).')
 	}
 
 	try {

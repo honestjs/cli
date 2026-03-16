@@ -14,6 +14,7 @@ export interface GenerateOptions {
 	skipImport?: boolean
 	export?: boolean
 	force?: boolean
+	dryRun?: boolean
 }
 
 export interface GenerateResult {
@@ -50,11 +51,13 @@ export abstract class BaseGenerator {
 	}
 
 	protected async ensureDirectory(dir: string): Promise<void> {
+		if (this.options.dryRun) return
 		await fs.ensureDir(dir)
 	}
 
 	/** Writes file. Throws if file exists and options.force is not set. */
 	protected async writeFile(filePath: string, content: string): Promise<void> {
+		if (this.options.dryRun) return
 		if (!this.options.force && (await fs.pathExists(filePath))) {
 			throw new Error(`File already exists: ${filePath}. Use --force to overwrite.`)
 		}
