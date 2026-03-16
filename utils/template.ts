@@ -232,7 +232,12 @@ export async function copyTemplate(
 		const filesDir = path.join(templateDir, 'files')
 
 		if (fs.existsSync(templateConfigPath) && fs.existsSync(filesDir)) {
-			await fs.copy(filesDir, projectPath)
+			await fs.copy(filesDir, projectPath, {
+				filter: (src) => {
+					const normalized = src.replace(/\\/g, '/')
+					return !normalized.includes('node_modules') && !normalized.includes('.git')
+				}
+			})
 
 			const mergedConfig: ProjectConfig = {
 				name: projectName,
@@ -251,7 +256,12 @@ export async function copyTemplate(
 
 			await copySharedConfigs(projectPath, mergedConfig, root)
 		} else {
-			await fs.copy(templateDir, projectPath)
+			await fs.copy(templateDir, projectPath, {
+				filter: (src) => {
+					const normalized = src.replace(/\\/g, '/')
+					return !normalized.includes('node_modules') && !normalized.includes('.git')
+				}
+			})
 			await applyProjectConfiguration(projectPath, config)
 		}
 	} catch (error) {

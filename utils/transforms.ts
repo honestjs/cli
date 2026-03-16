@@ -9,6 +9,27 @@ import { minimatch } from 'minimatch'
 import path from 'path'
 import { ProjectConfig, Template } from './template'
 
+const PM_EXEC: Record<NonNullable<ProjectConfig['packageManager']>, string> = {
+	bun: 'bunx',
+	npm: 'npx',
+	pnpm: 'pnpm dlx',
+	yarn: 'yarn dlx'
+}
+
+/**
+ * Replaces {{pm}} and {{pmExec}} in script values. Templates use these placeholders
+ * so we substitute once at scaffold time; no pattern-matching on "bun run" / "bunx".
+ */
+function substitutePackageManagerPlaceholders(
+	script: string,
+	packageManager: NonNullable<ProjectConfig['packageManager']>
+): string {
+	if (!script) return script
+	const pm = packageManager
+	const pmExec = PM_EXEC[pm]
+	return script.replace(/\{\{pm\}\}/g, pm).replace(/\{\{pmExec\}\}/g, pmExec)
+}
+
 /** Returns true if the pattern contains glob characters (* or ?). */
 function isGlobPattern(pattern: string): boolean {
 	return pattern.includes('*') || pattern.includes('?')
@@ -210,15 +231,10 @@ export async function applyProjectConfiguration(projectPath: string, config?: Pa
 
 		packageJson.name = config.name || packageJson.name
 
-		if (config.packageManager && config.packageManager !== 'bun') {
-			Object.keys(packageJson.scripts || {}).forEach((key) => {
-				if (packageJson.scripts[key].startsWith('bun ')) {
-					packageJson.scripts[key] = packageJson.scripts[key].replace('bun ', `${config.packageManager} `)
-				}
-			})
-		}
-
 		const pm = config.packageManager || 'bun'
+		Object.keys(packageJson.scripts || {}).forEach((key) => {
+			packageJson.scripts[key] = substitutePackageManagerPlaceholders(packageJson.scripts[key], pm)
+		})
 
 		if (!config.eslint) {
 			delete packageJson.scripts?.lint

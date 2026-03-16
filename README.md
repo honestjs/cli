@@ -32,7 +32,7 @@ hnjs new <project-name> [options]
 
 **Options**
 
-- `-t, --template <template>`: Template name (e.g., `barebone`, `blank`, `mvc`, `api-starter`) or local path (`./path`,
+- `-t, --template <template>`: Template name (e.g., `barebone`, `blank`, `mvc`) or local path (`./path`,
   `~/path`).
 - `-p, --package-manager <manager>`: Choose a package manager (e.g., `bun`, `npm`, `yarn`, `pnpm`).
 - `--typescript`: Use TypeScript in the project.
@@ -52,7 +52,7 @@ hnjs new <project-name> [options]
 - `--refresh-templates`: Force refresh template cache before use.
 
 **Local templates:** Use a local path for `--template` to scaffold from a local templates repo or single template
-directory. Examples: `honestjs new my-app -t ./templates/api-starter`, `honestjs new my-app -t ~/company/templates -y`.
+directory. Examples: `honestjs new my-app -t ./templates -y`, `honestjs new my-app -t ~/company/templates -y`.
 
 ### `list`
 

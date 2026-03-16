@@ -22,10 +22,7 @@ import {
 const newCommand = new Command('new')
 	.description('Create a new honestjs project')
 	.argument('[project-name]', 'Name of the project')
-	.option(
-		'-t, --template <template>',
-		'Template name (barebone, blank, mvc, api-starter) or local path (./path, ~/path)'
-	)
+	.option('-t, --template <template>', 'Template name (barebone, blank, mvc) or local path (./path, ~/path)')
 	.option('-p, --package-manager <manager>', 'Package manager to use (bun, npm, yarn, pnpm)')
 	.option('--typescript', 'Use TypeScript')
 	.option('--no-typescript', 'Skip TypeScript')

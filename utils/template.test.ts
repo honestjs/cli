@@ -18,7 +18,7 @@ describe('isLocalTemplatePath', () => {
 	it('returns true for relative paths', () => {
 		expect(isLocalTemplatePath('./foo')).toBe(true)
 		expect(isLocalTemplatePath('../foo')).toBe(true)
-		expect(isLocalTemplatePath('./templates/api-starter')).toBe(true)
+		expect(isLocalTemplatePath('./templates/barebone')).toBe(true)
 	})
 
 	it('returns true for home paths', () => {
@@ -35,7 +35,7 @@ describe('isLocalTemplatePath', () => {
 
 	it('returns false for template names', () => {
 		expect(isLocalTemplatePath('barebone')).toBe(false)
-		expect(isLocalTemplatePath('api-starter')).toBe(false)
+		expect(isLocalTemplatePath('barebone')).toBe(false)
 		expect(isLocalTemplatePath('mvc')).toBe(false)
 	})
 
@@ -81,17 +81,17 @@ describe('getLocalTemplatesRoot', () => {
 	})
 
 	it('returns single mode for directory with template.json and files/', () => {
-		const apiStarterPath = path.join(TEMPLATES_ROOT, 'templates', 'api-starter')
-		if (!fs.existsSync(apiStarterPath)) {
+		const barebonePath = path.join(TEMPLATES_ROOT, 'templates', 'barebone')
+		if (!fs.existsSync(barebonePath)) {
 			return
 		}
-		const result = getLocalTemplatesRoot(apiStarterPath)
+		const result = getLocalTemplatesRoot(barebonePath)
 		expect(result).not.toBeNull()
 		expect(result!.mode).toBe('single')
 		if (result && result.mode === 'single') {
-			expect(result.templateName).toBe('api-starter')
+			expect(result.templateName).toBe('barebone')
 		}
-		expect(result!.root).toBe(apiStarterPath)
+		expect(result!.root).toBe(barebonePath)
 	})
 
 	it('returns null for non-existent path', () => {
@@ -116,17 +116,18 @@ describe('getTemplates', () => {
 		const templates = await getTemplates({ localPath: TEMPLATES_ROOT })
 		expect(templates.length).toBeGreaterThan(0)
 		expect(templates.some((t) => t.name === 'barebone')).toBe(true)
-		expect(templates.some((t) => t.name === 'api-starter')).toBe(true)
+		expect(templates.some((t) => t.name === 'blank')).toBe(true)
+		expect(templates.some((t) => t.name === 'mvc')).toBe(true)
 	})
 
 	it('loads single template from local path', async () => {
-		const apiStarterPath = path.join(TEMPLATES_ROOT, 'templates', 'api-starter')
-		if (!fs.existsSync(apiStarterPath)) {
+		const barebonePath = path.join(TEMPLATES_ROOT, 'templates', 'barebone')
+		if (!fs.existsSync(barebonePath)) {
 			return
 		}
-		const templates = await getTemplates({ localPath: apiStarterPath })
+		const templates = await getTemplates({ localPath: barebonePath })
 		expect(templates).toHaveLength(1)
-		expect(templates[0].name).toBe('api-starter')
+		expect(templates[0].name).toBe('barebone')
 		expect(templates[0].path).toBe('.')
 		expect(templates[0].category).toBe('local')
 	})
@@ -173,20 +174,20 @@ describe('copyTemplate', () => {
 	})
 
 	it('scaffolds project from local single template', async () => {
-		const apiStarterPath = path.join(TEMPLATES_ROOT, 'templates', 'api-starter')
-		if (!fs.existsSync(apiStarterPath)) {
+		const barebonePath = path.join(TEMPLATES_ROOT, 'templates', 'barebone')
+		if (!fs.existsSync(barebonePath)) {
 			return
 		}
 		await copyTemplate(
-			'api-starter',
+			'barebone',
 			'my-project',
 			{
 				git: false,
 				install: false
 			},
 			{
-				localPath: apiStarterPath,
-				templatesRoot: apiStarterPath
+				localPath: barebonePath,
+				templatesRoot: barebonePath
 			}
 		)
 		const projectPath = path.join(tmpDir, 'my-project')
@@ -214,6 +215,42 @@ describe('copyTemplate', () => {
 		const projectPath = path.join(tmpDir, 'blank-project')
 		expect(fs.existsSync(projectPath)).toBe(true)
 		expect(fs.existsSync(path.join(projectPath, 'package.json'))).toBe(true)
+	})
+
+	it('scaffold output does not include node_modules', async () => {
+		if (!fs.existsSync(TEMPLATES_ROOT)) {
+			return
+		}
+		await copyTemplate(
+			'blank',
+			'no-deps-project',
+			{ git: false, install: false },
+			{ localPath: TEMPLATES_ROOT, templatesRoot: TEMPLATES_ROOT }
+		)
+		const projectPath = path.join(tmpDir, 'no-deps-project')
+		expect(fs.existsSync(projectPath)).toBe(true)
+		expect(fs.existsSync(path.join(projectPath, 'node_modules'))).toBe(false)
+	})
+
+	it('rewrites only bun run / bunx when scaffolding with npm', async () => {
+		if (!fs.existsSync(TEMPLATES_ROOT)) {
+			return
+		}
+		await copyTemplate(
+			'blank',
+			'npm-scripts-project',
+			{
+				git: false,
+				install: false,
+				packageManager: 'npm'
+			},
+			{ localPath: TEMPLATES_ROOT, templatesRoot: TEMPLATES_ROOT }
+		)
+		const projectPath = path.join(tmpDir, 'npm-scripts-project')
+		const pkg = await fs.readJson(path.join(projectPath, 'package.json'))
+		const scripts = pkg.scripts || {}
+		expect(scripts.start).toBe('bun dist/main.js')
+		expect(scripts.dev).toMatch(/npm run/)
 	})
 
 	it('throws for non-existent template', async () => {
