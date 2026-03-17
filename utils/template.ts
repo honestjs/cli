@@ -57,6 +57,8 @@ export interface Template {
 	tags?: string[]
 	version?: string
 	author?: string
+	/** Supported runtimes (e.g. "bun", "node"). When absent, assume both. */
+	runtimes?: string[]
 }
 
 export interface TemplateRegistry {
@@ -120,7 +122,8 @@ export async function getTemplates(options?: GetTemplatesOptions): Promise<Templ
 				path: '.',
 				category: 'local',
 				version: templateConfig.version,
-				author: templateConfig.author
+				author: templateConfig.author,
+				runtimes: templateConfig.runtimes
 			}
 		]
 	}

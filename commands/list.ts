@@ -78,6 +78,10 @@ const listCommand = new Command('list')
 						consola.info(`     Tags: ${template.tags.join(', ')}`)
 					}
 
+					if (template.runtimes && template.runtimes.length > 0) {
+						consola.info(`     Runtimes: ${template.runtimes.join(', ')}`)
+					}
+
 					consola.info(
 						`     Template: ${useLocal ? `local (${options.local})` : `honestjs/templates/${template.path}`}`
 					)
