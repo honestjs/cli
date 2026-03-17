@@ -137,6 +137,19 @@ export async function getTemplatesRoot(options?: GetTemplatesOptions): Promise<s
 	return getTemplateCache(options?.force, options?.offline)
 }
 
+/** Enriches template list with runtimes (and optional metadata) from each template's template.json. */
+async function enrichTemplatesFromTemplateJson(templates: Template[], root: string): Promise<Template[]> {
+	for (const t of templates) {
+		const templateDir = getTemplateDir(root, t)
+		const templateJsonPath = path.join(templateDir, 'template.json')
+		if (fs.existsSync(templateJsonPath)) {
+			const templateConfig = await fs.readJson(templateJsonPath)
+			if (templateConfig.runtimes !== undefined) t.runtimes = templateConfig.runtimes
+		}
+	}
+	return templates
+}
+
 /** Loads the template registry (templates.json) from the cache or local path and returns template metadata. */
 export async function getTemplates(options?: GetTemplatesOptions): Promise<Template[]> {
 	const { localPath } = options ?? {}
@@ -152,11 +165,12 @@ export async function getTemplates(options?: GetTemplatesOptions): Promise<Templ
 		if (info.mode === 'repo') {
 			const registryPath = path.join(info.root, 'templates.json')
 			const registry: TemplateRegistry = await fs.readJson(registryPath)
-			return Object.entries(registry.templates).map(([key, template]) => ({
+			const templates = Object.entries(registry.templates).map(([key, template]) => ({
 				...template,
 				name: key,
 				path: template.path || key
 			}))
+			return enrichTemplatesFromTemplateJson(templates, info.root)
 		}
 		// Single template mode
 		const templateJsonPath = path.join(info.root, 'template.json')
@@ -179,11 +193,12 @@ export async function getTemplates(options?: GetTemplatesOptions): Promise<Templ
 
 	if (fs.existsSync(registryPath)) {
 		const registry: TemplateRegistry = await fs.readJson(registryPath)
-		return Object.entries(registry.templates).map(([key, template]) => ({
+		const templates = Object.entries(registry.templates).map(([key, template]) => ({
 			...template,
 			name: key,
 			path: template.path || key
 		}))
+		return enrichTemplatesFromTemplateJson(templates, root)
 	}
 
 	throw new Error('templates.json not found in repository')

@@ -93,12 +93,14 @@ const newCommand = new Command('new')
 			if (options.yes) {
 				config = createDefaultConfig(config, templates, useLocalPath)
 				validateProjectConfig(config)
+				validateTemplateRuntimeCompatibility(config, templates)
 			} else {
 				if (config.name?.trim()) {
 					validateProjectName(config.name.trim())
 				}
 				config = await promptForConfiguration(config, templates, templateOptions)
 				validateProjectConfig(config)
+				validateTemplateRuntimeCompatibility(config, templates)
 			}
 
 			if (options.dryRun) {
@@ -161,11 +163,21 @@ function createDefaultConfig(
 		useLocalPath && templates.length > 0 && !templates.find((t) => t.name === initialConfig.template)
 			? templates[0].name
 			: initialConfig.template || 'barebone'
+	const templateMeta = templates.find((t) => t.name === template)
+	const defaultPackageManager =
+		initialConfig.packageManager ??
+		(templateMeta?.runtimes?.length
+			? templateMeta.runtimes!.includes('bun')
+				? 'bun'
+				: templateMeta.runtimes!.includes('node')
+					? 'npm'
+					: 'bun'
+			: 'bun')
 	const defaultConfig = {
 		...initialConfig,
 		name: initialConfig.name || 'honestjs-project',
 		template,
-		packageManager: initialConfig.packageManager || 'bun',
+		packageManager: defaultPackageManager,
 		typescript: initialConfig.typescript ?? true,
 		eslint: initialConfig.eslint ?? true,
 		prettier: initialConfig.prettier ?? true,
@@ -241,17 +253,28 @@ async function promptForConfiguration(
 		config = { ...config, ...templateAnswers }
 	}
 
+	const selectedTemplate = templates.find((t) => t.name === config.template)
+	const allowedPms = selectedTemplate ? getAllowedPackageManagers(selectedTemplate) : null
+	const packageManagerChoices =
+		allowedPms === null
+			? [
+					{ title: 'Bun (recommended)', value: 'bun' as const },
+					{ title: 'npm', value: 'npm' as const },
+					{ title: 'yarn', value: 'yarn' as const },
+					{ title: 'pnpm', value: 'pnpm' as const }
+				]
+			: allowedPms.length === 1
+				? [{ title: `Bun (required for ${config.template})`, value: 'bun' as const }]
+				: allowedPms.map((pm) => ({
+						title: pm === 'bun' ? 'Bun (recommended)' : pm,
+						value: pm
+					}))
 	const generalQuestions: PromptObject[] = [
 		{
 			type: config.packageManager === undefined ? 'select' : null,
 			name: 'packageManager',
 			message: 'Which package manager would you like to use?',
-			choices: [
-				{ title: 'Bun (recommended)', value: 'bun' },
-				{ title: 'npm', value: 'npm' },
-				{ title: 'yarn', value: 'yarn' },
-				{ title: 'pnpm', value: 'pnpm' }
-			],
+			choices: packageManagerChoices,
 			initial: 0
 		},
 		{
@@ -324,6 +347,37 @@ function validateProjectName(name: string): void {
 	}
 	if (fs.existsSync(trimmed)) {
 		consola.error(`Error: Directory '${trimmed}' already exists`)
+		process.exit(1)
+	}
+}
+
+/** Maps package manager to runtime. */
+function packageManagerToRuntime(pm: ProjectConfig['packageManager']): string {
+	return pm === 'bun' ? 'bun' : 'node'
+}
+
+/** Returns package managers allowed by template runtimes, or null if no restriction. */
+function getAllowedPackageManagers(template: Template): ProjectConfig['packageManager'][] | null {
+	if (!template.runtimes || template.runtimes.length === 0) return null
+	const allowed: ProjectConfig['packageManager'][] = []
+	if (template.runtimes.includes('bun')) allowed.push('bun')
+	if (template.runtimes.includes('node')) allowed.push('npm', 'yarn', 'pnpm')
+	return allowed.length === 0 ? [] : allowed
+}
+
+/** Validates that the chosen package manager is allowed by the template's runtimes. Exits on failure. */
+function validateTemplateRuntimeCompatibility(config: ProjectConfig, templates: Template[]): void {
+	const template = templates.find((t) => t.name === config.template)
+	if (!template?.runtimes || template.runtimes.length === 0) return
+	const pm = config.packageManager ?? 'bun'
+	const runtime = packageManagerToRuntime(pm)
+	if (!template.runtimes.includes(runtime)) {
+		const allowed = getAllowedPackageManagers(template)!
+		const hint =
+			allowed.length === 1
+				? `Use --package-manager ${allowed[0]}.`
+				: `Use one of: ${allowed.map((m) => `--package-manager ${m}`).join(', ')}.`
+		consola.error(`Template '${config.template}' only supports ${template.runtimes.join(' and ')}. ${hint}`)
 		process.exit(1)
 	}
 }
