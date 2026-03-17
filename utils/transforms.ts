@@ -421,7 +421,8 @@ export async function applyProjectConfiguration(
 	if (config.install) {
 		try {
 			const { execSync } = await import('child_process')
-			const command = 'bun install'
+			const pm = config.packageManager || 'bun'
+			const command = `${pm} install`
 			execSync(command, { cwd: projectPath, stdio: 'inherit' })
 			consola.log('✓ Installed dependencies')
 		} catch {
