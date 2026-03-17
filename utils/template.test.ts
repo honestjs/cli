@@ -331,7 +331,7 @@ describe('loadSharedPackageBase', () => {
 		const result = await loadSharedPackageBase(TEMPLATES_ROOT, context)
 		expect(result).not.toBeNull()
 		expect(result!.scripts).toBeDefined()
-		expect(result!.scripts!.tunnel).toContain('{{pmExec}}')
+		expect(result!.scripts!.tunnel).toBe('bunx localtunnel --port 3000')
 		expect(result!.scripts!.dev).toBe('bun run --watch src/main.ts')
 		expect(result!.scripts!.start).toBe('bun dist/main.js')
 		expect(result!.devDependencies).toBeDefined()
