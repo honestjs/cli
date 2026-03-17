@@ -7,7 +7,7 @@ The official command-line interface for scaffolding and managing HonestJS projec
 To install the CLI globally, run:
 
 ```bash
-npm install -g @honestjs/cli
+bun add -g @honestjs/cli
 ```
 
 ## Usage
