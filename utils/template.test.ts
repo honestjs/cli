@@ -255,8 +255,8 @@ describe('copyTemplate', () => {
 		expect(devDeps.tsup).toBeUndefined()
 		expect(scripts.dev).toBeDefined()
 		expect(scripts.start).toBe('bun dist/main.js')
-		expect(scripts['build:bun']).toBeDefined()
-		expect(scripts['build:node']).toBeDefined()
+		expect(scripts.build).toBeDefined()
+		expect(scripts.build).toContain('bun build')
 	})
 
 	it('rewrites only bun run / bunx when scaffolding with npm', async () => {
@@ -278,9 +278,10 @@ describe('copyTemplate', () => {
 		const scripts = pkg.scripts || {}
 		expect(scripts.start).toBe('node dist/main.js')
 		expect(scripts.dev).toBe('npm run dev:watch')
-		expect(scripts['build:node']).toContain('tsup')
+		expect(scripts.build).toContain('tsup')
 		expect(pkg.devDependencies?.tsx).toBeDefined()
 		expect(pkg.devDependencies?.tsup).toBeDefined()
+		expect(pkg.devDependencies?.['@types/bun']).toBeUndefined()
 	})
 
 	it('applies PM-specific script overrides when scaffolding with pnpm', async () => {
@@ -302,7 +303,7 @@ describe('copyTemplate', () => {
 		const scripts = pkg.scripts || {}
 		expect(scripts.start).toBe('node dist/main.js')
 		expect(scripts.dev).toBe('pnpm run dev:watch')
-		expect(scripts['build:node']).toContain('tsup')
+		expect(scripts.build).toContain('tsup')
 		expect(pkg.devDependencies?.tsx).toBeDefined()
 		expect(pkg.devDependencies?.tsup).toBeDefined()
 	})

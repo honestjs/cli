@@ -239,6 +239,11 @@ const SHARED_CONFIGS_FALLBACK: { file: string; condition: string | boolean }[] =
 	{ file: 'LICENSE', condition: true }
 ]
 
+/** Resolves the Dockerfile source file (Dockerfile.bun or Dockerfile.node) from package manager. */
+function getDockerfileSource(pm: NonNullable<ProjectConfig['packageManager']>): string {
+	return pm === 'bun' ? 'Dockerfile.bun' : 'Dockerfile.node'
+}
+
 /**
  * Returns the list of shared config file names that would be copied for the given config.
  * Used by copySharedConfigs and by --dry-run. Only includes files that exist in shared/configs.
@@ -261,11 +266,13 @@ export async function getSharedConfigsToCopy(config: ProjectConfig, templatesRoo
 	}
 
 	const out: string[] = []
+	const pm = config.packageManager ?? 'bun'
 	for (const { file, condition } of configsToCopy) {
 		const shouldCopy =
 			condition === true || (typeof condition === 'string' && config[condition as keyof ProjectConfig])
 		if (shouldCopy) {
-			const sourcePath = path.join(sharedConfigsDir, file)
+			const sourceFile = file === 'Dockerfile' ? getDockerfileSource(pm) : file
+			const sourcePath = path.join(sharedConfigsDir, sourceFile)
 			if (fs.existsSync(sourcePath)) {
 				out.push(file)
 			}
@@ -287,8 +294,10 @@ export async function copySharedConfigs(
 	const sharedConfigsDir = path.join(templatesRoot, 'shared', 'configs')
 	const filesToCopy = await getSharedConfigsToCopy(config, templatesRoot)
 
+	const pm = config.packageManager ?? 'bun'
 	for (const file of filesToCopy) {
-		const sourcePath = path.join(sharedConfigsDir, file)
+		const sourceFile = file === 'Dockerfile' ? getDockerfileSource(pm) : file
+		const sourcePath = path.join(sharedConfigsDir, sourceFile)
 		const targetPath = path.join(projectPath, file)
 		await fs.copy(sourcePath, targetPath)
 		consola.log(`✓ Copied ${file}`)

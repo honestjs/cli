@@ -1,7 +1,7 @@
 {
 	"name": "@honestjs/cli",
 	"description": "CLI tool for scaffolding honestjs projects",
-	"version": "0.1.11",
+	"version": "0.1.12",
 	"author": "Orkhan Karimov <karimovok1@gmail.com> (https://github.com/kerimovok)",
 	"repository": {
 		"type": "git",
