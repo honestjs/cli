@@ -259,53 +259,43 @@ describe('copyTemplate', () => {
 		expect(scripts.build).toContain('bun build')
 	})
 
-	it('rewrites only bun run / bunx when scaffolding with npm', async () => {
+	it('applies Bun-only scripts when scaffolding', async () => {
 		if (!fs.existsSync(TEMPLATES_ROOT)) {
 			return
 		}
 		await copyTemplate(
 			'blank',
-			'npm-scripts-project',
+			'bun-scripts-project',
 			{
 				git: false,
 				install: false,
-				packageManager: 'npm'
+				packageManager: 'bun'
 			},
 			{ localPath: TEMPLATES_ROOT, templatesRoot: TEMPLATES_ROOT }
 		)
-		const projectPath = path.join(tmpDir, 'npm-scripts-project')
+		const projectPath = path.join(tmpDir, 'bun-scripts-project')
 		const pkg = await fs.readJson(path.join(projectPath, 'package.json'))
 		const scripts = pkg.scripts || {}
-		expect(scripts.start).toBe('node dist/main.js')
-		expect(scripts.dev).toBe('npm run dev:watch')
-		expect(scripts.build).toContain('tsup')
-		expect(pkg.devDependencies?.tsx).toBeDefined()
-		expect(pkg.devDependencies?.tsup).toBeDefined()
-		expect(pkg.devDependencies?.['@types/bun']).toBeUndefined()
+		expect(scripts.start).toBe('bun dist/main.js')
+		expect(scripts.dev).toBe('bun run --watch src/main.ts')
+		expect(scripts.build).toContain('bun build')
+		expect(pkg.devDependencies?.['@types/bun']).toBeDefined()
+		expect(pkg.devDependencies?.tsx).toBeUndefined()
+		expect(pkg.devDependencies?.tsup).toBeUndefined()
 	})
 
-	it('applies PM-specific script overrides when scaffolding with pnpm', async () => {
-		if (!fs.existsSync(TEMPLATES_ROOT)) {
-			return
-		}
+	it('loads shared scripts and deps (Bun-only) regardless of config', async () => {
+		if (!fs.existsSync(TEMPLATES_ROOT)) return
 		await copyTemplate(
 			'blank',
-			'pnpm-scripts-project',
-			{
-				git: false,
-				install: false,
-				packageManager: 'pnpm'
-			},
+			'bun-only-project',
+			{ git: false, install: false, packageManager: 'bun' },
 			{ localPath: TEMPLATES_ROOT, templatesRoot: TEMPLATES_ROOT }
 		)
-		const projectPath = path.join(tmpDir, 'pnpm-scripts-project')
+		const projectPath = path.join(tmpDir, 'bun-only-project')
 		const pkg = await fs.readJson(path.join(projectPath, 'package.json'))
-		const scripts = pkg.scripts || {}
-		expect(scripts.start).toBe('node dist/main.js')
-		expect(scripts.dev).toBe('pnpm run dev:watch')
-		expect(scripts.build).toContain('tsup')
-		expect(pkg.devDependencies?.tsx).toBeDefined()
-		expect(pkg.devDependencies?.tsup).toBeDefined()
+		expect(pkg.scripts?.start).toBe('bun dist/main.js')
+		expect(pkg.devDependencies?.['@types/bun']).toBeDefined()
 	})
 
 	it('throws for non-existent template', async () => {
@@ -342,8 +332,10 @@ describe('loadSharedPackageBase', () => {
 		expect(result).not.toBeNull()
 		expect(result!.scripts).toBeDefined()
 		expect(result!.scripts!.tunnel).toContain('{{pmExec}}')
-		expect(result!.scripts!['dev:watch']).toBeDefined()
+		expect(result!.scripts!.dev).toBe('bun run --watch src/main.ts')
+		expect(result!.scripts!.start).toBe('bun dist/main.js')
 		expect(result!.devDependencies).toBeDefined()
 		expect(result!.devDependencies!.typescript).toBeDefined()
+		expect(result!.devDependencies!['@types/bun']).toBeDefined()
 	})
 })
