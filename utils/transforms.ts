@@ -35,14 +35,17 @@ function isGlobPattern(pattern: string): boolean {
 	return pattern.includes('*') || pattern.includes('?')
 }
 
+export type TransformResult = string | null | { source: string }
+export type TransformFn = (content: string, config: ProjectConfig) => TransformResult | Promise<TransformResult>
+
 /**
  * Finds a transform for the given file path. Tries exact match first, then glob patterns.
  * Transform keys can be exact paths (e.g. package.json) or glob patterns.
  */
 function findMatchingTransform(
 	relativePath: string,
-	transforms: Record<string, (content: string, config: ProjectConfig) => string | null | { source: string }>
-): [string, (content: string, config: ProjectConfig) => string | null | { source: string }] | null {
+	transforms: Record<string, TransformFn>
+): [string, TransformFn] | null {
 	const exact = transforms[relativePath]
 	if (exact) return [relativePath, exact]
 
@@ -62,11 +65,17 @@ function findMatchingTransform(
  * Applies template transforms: variable substitutions from template.json,
  * transforms from transforms.js (exact + glob), then project configuration.
  */
+export interface ApplyTemplateTransformsOptions {
+	/** When true, rethrow on first transform error instead of warning. */
+	strict?: boolean
+}
+
 export async function applyTemplateTransforms(
 	projectPath: string,
 	template: Template,
 	config: ProjectConfig,
-	templatesRoot: string
+	templatesRoot: string,
+	options?: ApplyTemplateTransformsOptions
 ): Promise<void> {
 	const templateDir = getTemplateDir(templatesRoot, template)
 	const templateConfigPath = path.join(templateDir, 'template.json')
@@ -84,7 +93,9 @@ export async function applyTemplateTransforms(
 	if (fs.existsSync(transformsPath)) {
 		try {
 			const { transforms } = await import(transformsPath)
-			await applyTransforms(projectPath, transforms, config, templatesRoot)
+			await applyTransforms(projectPath, transforms, config, templatesRoot, {
+				strict: options?.strict
+			})
 		} catch (error) {
 			consola.warn(`⚠ Could not load transforms for template '${template.name}': ${error}`)
 		}
@@ -94,16 +105,17 @@ export async function applyTemplateTransforms(
 }
 
 /**
- * Runs transforms on each file. Transform can return:
+ * Runs transforms on each file. Transform can return (or resolve to):
  * - string: replace file content
  * - null: delete the file
  * - { source: string }: copy from template (path relative to templatesRoot)
  */
 async function applyTransforms(
 	projectPath: string,
-	transforms: Record<string, (content: string, config: ProjectConfig) => string | null | { source: string }>,
+	transforms: Record<string, TransformFn>,
 	config: ProjectConfig,
-	templatesRoot: string
+	templatesRoot: string,
+	options?: { strict?: boolean }
 ): Promise<void> {
 	const files = await getAllFiles(projectPath)
 
@@ -115,7 +127,7 @@ async function applyTransforms(
 			const [, transform] = match
 			try {
 				const content = await fs.readFile(file, 'utf-8')
-				const result = transform(content, config)
+				const result = await Promise.resolve(transform(content, config))
 
 				if (result === null) {
 					await fs.remove(file)
@@ -127,7 +139,8 @@ async function applyTransforms(
 						: path.join(templatesRoot, result.source)
 					await fs.copy(sourcePath, file)
 				}
-			} catch {
+			} catch (err) {
+				if (options?.strict) throw err
 				consola.warn(`⚠ Transform failed for ${relativePath}`)
 			}
 		}
@@ -147,19 +160,14 @@ const SHARED_CONFIGS_FALLBACK: { file: string; condition: string | boolean }[] =
 ]
 
 /**
- * Copies shared config files (eslint, prettier, docker, etc.) into the project
- * based on config flags. Reads templates/shared/configs/manifest.json when present;
- * otherwise uses a hardcoded list for backward compatibility.
+ * Returns the list of shared config file names that would be copied for the given config.
+ * Used by copySharedConfigs and by --dry-run. Only includes files that exist in shared/configs.
  */
-export async function copySharedConfigs(
-	projectPath: string,
-	config: ProjectConfig,
-	templatesRoot: string
-): Promise<void> {
+export async function getSharedConfigsToCopy(config: ProjectConfig, templatesRoot: string): Promise<string[]> {
 	const sharedConfigsDir = path.join(templatesRoot, 'shared', 'configs')
 
 	if (!fs.existsSync(sharedConfigsDir)) {
-		return
+		return []
 	}
 
 	const manifestPath = path.join(sharedConfigsDir, 'manifest.json')
@@ -172,18 +180,38 @@ export async function copySharedConfigs(
 		configsToCopy = SHARED_CONFIGS_FALLBACK
 	}
 
+	const out: string[] = []
 	for (const { file, condition } of configsToCopy) {
 		const shouldCopy =
 			condition === true || (typeof condition === 'string' && config[condition as keyof ProjectConfig])
 		if (shouldCopy) {
 			const sourcePath = path.join(sharedConfigsDir, file)
-			const targetPath = path.join(projectPath, file)
-
 			if (fs.existsSync(sourcePath)) {
-				await fs.copy(sourcePath, targetPath)
-				consola.log(`✓ Copied ${file}`)
+				out.push(file)
 			}
 		}
+	}
+	return out
+}
+
+/**
+ * Copies shared config files (eslint, prettier, docker, etc.) into the project
+ * based on config flags. Reads templates/shared/configs/manifest.json when present;
+ * otherwise uses a hardcoded list for backward compatibility.
+ */
+export async function copySharedConfigs(
+	projectPath: string,
+	config: ProjectConfig,
+	templatesRoot: string
+): Promise<void> {
+	const sharedConfigsDir = path.join(templatesRoot, 'shared', 'configs')
+	const filesToCopy = await getSharedConfigsToCopy(config, templatesRoot)
+
+	for (const file of filesToCopy) {
+		const sourcePath = path.join(sharedConfigsDir, file)
+		const targetPath = path.join(projectPath, file)
+		await fs.copy(sourcePath, targetPath)
+		consola.log(`✓ Copied ${file}`)
 	}
 }
 

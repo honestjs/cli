@@ -7,12 +7,17 @@ import { Command } from 'commander'
 import { consola } from 'consola'
 import fs from 'fs-extra'
 import prompts, { PromptObject } from 'prompts'
+import path from 'path'
 import {
 	copyTemplate,
 	getLocalTemplatesRoot,
+	getTemplateDir,
 	getTemplatePrompts,
 	getTemplates,
+	getSharedConfigsToCopy,
+	getTemplatesRoot,
 	isLocalTemplatePath,
+	listTemplateFiles,
 	resolveLocalTemplatePath,
 	type GetTemplatesOptions,
 	type ProjectConfig,
@@ -39,6 +44,8 @@ const newCommand = new Command('new')
 	.option('-y, --yes', 'Skip prompts and use defaults')
 	.option('--offline', 'Use cached templates only (no network)')
 	.option('--refresh-templates', 'Force refresh template cache before use')
+	.option('--strict', 'Fail on first transform error (e.g. for CI)')
+	.option('--dry-run', 'Show what would be created without writing files')
 	.action(async (projectName, options) => {
 		let config: ProjectConfig = {
 			name: projectName || '',
@@ -54,7 +61,7 @@ const newCommand = new Command('new')
 
 		try {
 			const useLocalPath = isLocalTemplatePath(options.template || '')
-			let templateOptions: { offline?: boolean; force?: boolean; localPath?: string; templatesRoot?: string }
+			let templateOptions: GetTemplatesOptions
 
 			if (useLocalPath) {
 				const resolved = resolveLocalTemplatePath(options.template!)
@@ -65,12 +72,20 @@ const newCommand = new Command('new')
 					)
 					process.exit(1)
 				}
-				templateOptions = { localPath: resolved, templatesRoot: info.root }
+				templateOptions = {
+					localPath: resolved,
+					templatesRoot: info.root,
+					strict: options.strict ?? process.env.HONESTJS_STRICT === '1'
+				}
 				if (info.mode === 'single') {
 					config.template = info.templateName
 				}
 			} else {
-				templateOptions = { offline: options.offline, force: options.refreshTemplates }
+				templateOptions = {
+					offline: options.offline,
+					force: options.refreshTemplates,
+					strict: options.strict ?? process.env.HONESTJS_STRICT === '1'
+				}
 			}
 
 			const templates = await getTemplates(templateOptions)
@@ -82,6 +97,43 @@ const newCommand = new Command('new')
 			}
 
 			validateProjectConfig(config)
+
+			if (options.dryRun) {
+				const root = await getTemplatesRoot(templateOptions)
+				const template = (await getTemplates(templateOptions)).find((t) => t.name === config.template)
+				if (!template) throw new Error(`Template '${config.template}' not found`)
+				const projectPath = path.join(process.cwd(), config.name)
+				const templateDir = getTemplateDir(root, template)
+				consola.info('Dry run: the following would be created')
+				consola.log(`  Target: ${projectPath}`)
+				consola.log(`  Template: ${config.template} (${templateDir})`)
+				const filesDir = path.join(templateDir, 'files')
+				if (fs.existsSync(filesDir)) {
+					const fileList = await listTemplateFiles(filesDir)
+					consola.log(`  Would copy ${fileList.length} file(s) from template`)
+					if (fileList.length <= 20) {
+						fileList.forEach((f) => consola.log(`    - ${f}`))
+					} else {
+						fileList.slice(0, 15).forEach((f) => consola.log(`    - ${f}`))
+						consola.log(`    ... and ${fileList.length - 15} more`)
+					}
+				}
+				const mergedConfig: ProjectConfig = {
+					...config,
+					packageManager: config.packageManager ?? 'bun',
+					install: config.install ?? true,
+					git: config.git ?? true,
+					typescript: config.typescript ?? true,
+					eslint: config.eslint ?? true,
+					prettier: config.prettier ?? true,
+					docker: config.docker ?? true
+				}
+				const sharedConfigs = await getSharedConfigsToCopy(mergedConfig, root)
+				consola.log(`  Would add shared configs: ${sharedConfigs.length} file(s)`)
+				sharedConfigs.forEach((f) => consola.log(`    - ${f}`))
+				consola.success('Dry run complete. Run without --dry-run to create the project.')
+				return
+			}
 
 			consola.start('Creating project...')
 			await copyTemplate(config.template, config.name, config, templateOptions)

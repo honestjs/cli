@@ -89,6 +89,8 @@ export interface GetTemplatesOptions {
 	localPath?: string
 	/** When set (e.g. for local templates), use this as templates root instead of cache. */
 	templatesRoot?: string
+	/** When true, rethrow on first transform error instead of warning (e.g. for CI). */
+	strict?: boolean
 }
 
 /** Returns the absolute path to a template directory given the templates root and template metadata. */
@@ -99,9 +101,45 @@ export function getTemplateDir(root: string, template: Template): string {
 	return path.join(root, 'templates', template.path)
 }
 
+/** Lists relative paths under dir that would be copied (excludes node_modules and .git). */
+export async function listTemplateFiles(filesDir: string): Promise<string[]> {
+	const out: string[] = []
+	async function walk(dir: string, prefix: string): Promise<void> {
+		const entries = await fs.readdir(dir, { withFileTypes: true })
+		for (const entry of entries) {
+			const normalized = path.join(prefix, entry.name).replace(/\\/g, '/')
+			if (normalized.includes('node_modules') || normalized.includes('.git')) continue
+			const full = path.join(dir, entry.name)
+			if (entry.isDirectory()) {
+				await walk(full, path.join(prefix, entry.name))
+			} else {
+				out.push(path.join(prefix, entry.name).replace(/\\/g, '/'))
+			}
+		}
+	}
+	await walk(filesDir, '')
+	return out
+}
+
+/** Returns the templates root directory (cache dir or local repo root). Use this instead of getTemplateCache when options may include templatesRoot or localPath. */
+export async function getTemplatesRoot(options?: GetTemplatesOptions): Promise<string> {
+	if (options?.templatesRoot) return options.templatesRoot
+	if (options?.localPath) {
+		const resolved = resolveLocalTemplatePath(options.localPath)
+		const info = getLocalTemplatesRoot(resolved)
+		if (!info) {
+			throw new Error(
+				`Invalid local template path: '${options.localPath}'. Expected a directory with templates.json (repo root) or template.json + files/ (single template).`
+			)
+		}
+		return info.root
+	}
+	return getTemplateCache(options?.force, options?.offline)
+}
+
 /** Loads the template registry (templates.json) from the cache or local path and returns template metadata. */
 export async function getTemplates(options?: GetTemplatesOptions): Promise<Template[]> {
-	const { offline, force, localPath } = options ?? {}
+	const { localPath } = options ?? {}
 
 	if (localPath) {
 		const resolved = resolveLocalTemplatePath(localPath)
@@ -136,8 +174,8 @@ export async function getTemplates(options?: GetTemplatesOptions): Promise<Templ
 		]
 	}
 
-	const cacheDir = await getTemplateCache(force, offline)
-	const registryPath = path.join(cacheDir, 'templates.json')
+	const root = await getTemplatesRoot(options)
+	const registryPath = path.join(root, 'templates.json')
 
 	if (fs.existsSync(registryPath)) {
 		const registry: TemplateRegistry = await fs.readJson(registryPath)
@@ -156,18 +194,7 @@ export async function getTemplatePrompts(
 	templateName: string,
 	options?: GetTemplatesOptions
 ): Promise<PromptObject[] | null> {
-	const { offline, force, localPath } = options ?? {}
-
-	let templatesRoot: string
-	if (localPath) {
-		const resolved = resolveLocalTemplatePath(localPath)
-		const info = getLocalTemplatesRoot(resolved)
-		if (!info) return null
-		templatesRoot = info.root
-	} else {
-		templatesRoot = await getTemplateCache(force, offline)
-	}
-
+	const templatesRoot = await getTemplatesRoot(options)
 	const templates = await getTemplates(options)
 	const template = templates.find((t) => t.name === templateName)
 	if (!template) return null
@@ -196,7 +223,6 @@ export async function copyTemplate(
 	config?: Partial<ProjectConfig>,
 	options?: GetTemplatesOptions
 ): Promise<void> {
-	const { offline, force, localPath, templatesRoot } = options ?? {}
 	const templates = await getTemplates(options)
 	const template = templates.find((t) => t.name === templateName)
 
@@ -205,21 +231,7 @@ export async function copyTemplate(
 	}
 
 	const projectPath = path.join(process.cwd(), projectName)
-	let root: string
-	if (templatesRoot) {
-		root = templatesRoot
-	} else if (localPath) {
-		const resolved = resolveLocalTemplatePath(localPath)
-		const info = getLocalTemplatesRoot(resolved)
-		if (!info) {
-			throw new Error(
-				`Invalid local template path: '${localPath}'. Expected a directory with templates.json (repo root) or template.json + files/ (single template).`
-			)
-		}
-		root = info.root
-	} else {
-		root = await getTemplateCache(force, offline)
-	}
+	const root = await getTemplatesRoot(options)
 
 	try {
 		consola.info(`Creating project from template '${templateName}'...`)
@@ -251,7 +263,9 @@ export async function copyTemplate(
 				...config
 			}
 
-			await applyTemplateTransforms(projectPath, template, mergedConfig, root)
+			await applyTemplateTransforms(projectPath, template, mergedConfig, root, {
+				strict: options?.strict
+			})
 
 			await copySharedConfigs(projectPath, mergedConfig, root)
 		} else {
