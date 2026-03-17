@@ -10,7 +10,7 @@ import {
 	isLocalTemplatePath,
 	resolveLocalTemplatePath
 } from './template'
-import { composeTemplatePackageJson, loadSharedPackageBase } from './transforms'
+import { loadSharedPackageBase } from './transforms'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const TEMPLATES_ROOT = path.resolve(__dirname, '..', '..', 'templates')
@@ -344,32 +344,5 @@ describe('loadSharedPackageBase', () => {
 		expect(result!.scripts!['dev:watch']).toBeDefined()
 		expect(result!.devDependencies).toBeDefined()
 		expect(result!.devDependencies!.typescript).toBeDefined()
-	})
-})
-
-describe('composeTemplatePackageJson', () => {
-	let tmpDir: string
-	const originalCwd = process.cwd()
-
-	beforeEach(async () => {
-		tmpDir = await fs.mkdtemp(path.join(process.cwd(), 'honestjs-compose-test-'))
-		process.chdir(tmpDir)
-	})
-
-	afterEach(async () => {
-		process.chdir(originalCwd)
-		await fs.remove(tmpDir).catch(() => {})
-	})
-
-	it('no-ops when project has no package.json', async () => {
-		await composeTemplatePackageJson(tmpDir, TEMPLATES_ROOT)
-		expect(fs.existsSync(path.join(tmpDir, 'package.json'))).toBe(false)
-	})
-
-	it('no-ops and leaves package.json unchanged', async () => {
-		await fs.writeJson(path.join(tmpDir, 'package.json'), { name: 'test', scripts: { dev: 'custom' } })
-		await composeTemplatePackageJson(tmpDir, TEMPLATES_ROOT)
-		const pkg = await fs.readJson(path.join(tmpDir, 'package.json'))
-		expect(pkg.scripts.dev).toBe('custom')
 	})
 })

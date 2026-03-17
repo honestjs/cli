@@ -9,12 +9,7 @@ import os from 'os'
 import path from 'path'
 import type { PromptObject } from 'prompts'
 import { getTemplateCache } from './cache'
-import {
-	applyProjectConfiguration,
-	applyTemplateTransforms,
-	composeTemplatePackageJson,
-	copySharedConfigs
-} from './transforms'
+import { applyProjectConfiguration, applyTemplateTransforms, copySharedConfigs } from './transforms'
 
 /** Returns true if the value looks like a local filesystem path. */
 export function isLocalTemplatePath(value: string): boolean {
@@ -254,8 +249,6 @@ export async function copyTemplate(
 					return !normalized.includes('node_modules') && !normalized.includes('.git')
 				}
 			})
-
-			await composeTemplatePackageJson(projectPath, root)
 
 			const mergedConfig: ProjectConfig = {
 				name: projectName,

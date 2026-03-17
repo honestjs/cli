@@ -227,15 +227,6 @@ export async function loadSharedPackageBase(
 	}
 }
 
-/**
- * Composes project package.json with shared base scripts and devDependencies.
- * Shared base is loaded from .js modules in applyProjectConfiguration (with context);
- * this step is a no-op when using JS-only shared package.
- */
-export async function composeTemplatePackageJson(_projectPath: string, _templatesRoot: string): Promise<void> {
-	// Shared scripts and devDependencies are merged in applyProjectConfiguration when context is available.
-}
-
 const SHARED_CONFIGS_FALLBACK: { file: string; condition: string | boolean }[] = [
 	{ file: 'eslint.config.js', condition: 'eslint' },
 	{ file: 'prettier.config.js', condition: 'prettier' },
@@ -304,7 +295,7 @@ export async function copySharedConfigs(
 	}
 }
 
-/** Builds a flat map of placeholder keys to string values from config and template variables (primitives only). Config wins over template variables. */
+/** Builds a flat map of placeholder keys to string values from config and template variables (primitives only). Config wins over template variables. Adds projectName alias for config.name. */
 function buildSubstitutionMap(
 	config: ProjectConfig,
 	templateVariables: Record<string, unknown>
@@ -317,6 +308,9 @@ function buildSubstitutionMap(
 		} else if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
 			map[key] = String(value)
 		}
+	}
+	if (config.name != null) {
+		map['projectName'] = String(config.name)
 	}
 	return map
 }
@@ -365,7 +359,7 @@ async function getAllFiles(dir: string): Promise<string[]> {
 
 /**
  * Applies project config: package.json (name, scripts, package manager),
- * README placeholders, git init, and dependency install.
+ * git init, and dependency install. README placeholders (e.g. {{projectName}}, {{packageManager}}) are replaced in applyVariableSubstitutions via buildSubstitutionMap.
  */
 export async function applyProjectConfiguration(
 	projectPath: string,
@@ -407,14 +401,6 @@ export async function applyProjectConfiguration(
 		})
 
 		await fs.writeJson(packageJsonPath, packageJson, { spaces: 2 })
-	}
-
-	const readmePath = path.join(projectPath, 'README.md')
-	if (fs.existsSync(readmePath)) {
-		let content = await fs.readFile(readmePath, 'utf-8')
-		content = content.replace(/\{\{projectName\}\}/g, config.name || '')
-		content = content.replace(/\{\{packageManager\}\}/g, config.packageManager || 'bun')
-		await fs.writeFile(readmePath, content)
 	}
 
 	if (config.git) {
