@@ -7,7 +7,7 @@ import { consola } from 'consola'
 import fs from 'fs-extra'
 import { minimatch } from 'minimatch'
 import path from 'path'
-import { ProjectConfig, Template } from './template'
+import { getTemplateDir, ProjectConfig, Template } from './template'
 
 const PM_EXEC: Record<NonNullable<ProjectConfig['packageManager']>, string> = {
 	bun: 'bunx',
@@ -68,22 +68,17 @@ export async function applyTemplateTransforms(
 	config: ProjectConfig,
 	templatesRoot: string
 ): Promise<void> {
-	let templateDir: string
-	if (template.path.startsWith('templates/')) {
-		templateDir = path.join(templatesRoot, template.path)
-	} else {
-		templateDir = path.join(templatesRoot, 'templates', template.path)
-	}
-
+	const templateDir = getTemplateDir(templatesRoot, template)
 	const templateConfigPath = path.join(templateDir, 'template.json')
 	const transformsPath = path.join(templateDir, 'transforms.js')
 
 	if (fs.existsSync(templateConfigPath)) {
 		const templateConfig = await fs.readJson(templateConfigPath)
-
-		if (templateConfig.variables && config) {
-			await applyVariableSubstitutions(projectPath, templateConfig.variables, config)
-		}
+		const substitutionMap = buildSubstitutionMap(config, templateConfig.variables ?? {})
+		await applyVariableSubstitutions(projectPath, substitutionMap)
+	} else {
+		const substitutionMap = buildSubstitutionMap(config, {})
+		await applyVariableSubstitutions(projectPath, substitutionMap)
 	}
 
 	if (fs.existsSync(transformsPath)) {
@@ -139,9 +134,22 @@ async function applyTransforms(
 	}
 }
 
+const SHARED_CONFIGS_FALLBACK: { file: string; condition: string | boolean }[] = [
+	{ file: 'eslint.config.js', condition: 'eslint' },
+	{ file: 'prettier.config.js', condition: 'prettier' },
+	{ file: 'tsconfig.json', condition: 'typescript' },
+	{ file: 'Dockerfile', condition: 'docker' },
+	{ file: 'docker-compose.yml', condition: 'docker' },
+	{ file: '.dockerignore', condition: 'docker' },
+	{ file: '.gitignore', condition: 'git' },
+	{ file: '.prettierignore', condition: 'prettier' },
+	{ file: 'LICENSE', condition: true }
+]
+
 /**
  * Copies shared config files (eslint, prettier, docker, etc.) into the project
- * based on config flags. Path: templates/shared/configs/.
+ * based on config flags. Reads templates/shared/configs/manifest.json when present;
+ * otherwise uses a hardcoded list for backward compatibility.
  */
 export async function copySharedConfigs(
 	projectPath: string,
@@ -154,20 +162,20 @@ export async function copySharedConfigs(
 		return
 	}
 
-	const configsToCopy = [
-		{ file: 'eslint.config.js', condition: config.eslint },
-		{ file: 'prettier.config.js', condition: config.prettier },
-		{ file: 'tsconfig.json', condition: config.typescript },
-		{ file: 'Dockerfile', condition: config.docker },
-		{ file: 'docker-compose.yml', condition: config.docker },
-		{ file: '.dockerignore', condition: config.docker },
-		{ file: '.gitignore', condition: config.git },
-		{ file: '.prettierignore', condition: config.prettier },
-		{ file: 'LICENSE', condition: true }
-	]
+	const manifestPath = path.join(sharedConfigsDir, 'manifest.json')
+	let configsToCopy: { file: string; condition: string | boolean }[]
+
+	if (fs.existsSync(manifestPath)) {
+		const manifest = (await fs.readJson(manifestPath)) as { file: string; condition: string | boolean }[]
+		configsToCopy = manifest
+	} else {
+		configsToCopy = SHARED_CONFIGS_FALLBACK
+	}
 
 	for (const { file, condition } of configsToCopy) {
-		if (condition) {
+		const shouldCopy =
+			condition === true || (typeof condition === 'string' && config[condition as keyof ProjectConfig])
+		if (shouldCopy) {
 			const sourcePath = path.join(sharedConfigsDir, file)
 			const targetPath = path.join(projectPath, file)
 
@@ -179,24 +187,44 @@ export async function copySharedConfigs(
 	}
 }
 
-/** Replaces {{projectName}} and {{packageManager}} in JSON, MD, JS, TS files. */
-async function applyVariableSubstitutions(
-	projectPath: string,
-	_variables: Record<string, unknown>,
-	config: ProjectConfig
-): Promise<void> {
+/** Builds a flat map of placeholder keys to string values from config and template variables (primitives only). Config wins over template variables. */
+function buildSubstitutionMap(
+	config: ProjectConfig,
+	templateVariables: Record<string, unknown>
+): Record<string, string> {
+	const merged = { ...templateVariables, ...config }
+	const map: Record<string, string> = {}
+	for (const [key, value] of Object.entries(merged)) {
+		if (value === null || value === undefined) {
+			map[key] = ''
+		} else if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+			map[key] = String(value)
+		}
+	}
+	return map
+}
+
+/** Replaces {{key}} placeholders in JSON, MD, JS, TS files using the given substitution map. */
+async function applyVariableSubstitutions(projectPath: string, substitutionMap: Record<string, string>): Promise<void> {
 	const files = await getAllFiles(projectPath)
 
 	for (const file of files) {
 		if (file.endsWith('.json') || file.endsWith('.md') || file.endsWith('.js') || file.endsWith('.ts')) {
 			let content = await fs.readFile(file, 'utf-8')
 
-			content = content.replace(/\{\{projectName\}\}/g, config.name || '')
-			content = content.replace(/\{\{packageManager\}\}/g, config.packageManager || 'bun')
+			for (const [key, value] of Object.entries(substitutionMap)) {
+				const placeholder = `{{${key}}}`
+				content = content.replace(new RegExp(escapeRegExp(placeholder), 'g'), value)
+			}
 
 			await fs.writeFile(file, content)
 		}
 	}
+}
+
+/** Escapes special regex characters in a string. */
+function escapeRegExp(s: string): string {
+	return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 /** Recursively collects all file paths under a directory. */

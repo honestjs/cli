@@ -91,6 +91,14 @@ export interface GetTemplatesOptions {
 	templatesRoot?: string
 }
 
+/** Returns the absolute path to a template directory given the templates root and template metadata. */
+export function getTemplateDir(root: string, template: Template): string {
+	if (template.path === '.' || template.path.startsWith('templates/')) {
+		return path.join(root, template.path)
+	}
+	return path.join(root, 'templates', template.path)
+}
+
 /** Loads the template registry (templates.json) from the cache or local path and returns template metadata. */
 export async function getTemplates(options?: GetTemplatesOptions): Promise<Template[]> {
 	const { offline, force, localPath } = options ?? {}
@@ -164,13 +172,7 @@ export async function getTemplatePrompts(
 	const template = templates.find((t) => t.name === templateName)
 	if (!template) return null
 
-	let templateDir: string
-	if (template.path === '.' || template.path.startsWith('templates/')) {
-		templateDir = path.join(templatesRoot, template.path)
-	} else {
-		templateDir = path.join(templatesRoot, 'templates', template.path)
-	}
-
+	const templateDir = getTemplateDir(templatesRoot, template)
 	const promptsPath = path.join(templateDir, 'prompts.js')
 	if (fs.existsSync(promptsPath)) {
 		try {
@@ -222,13 +224,7 @@ export async function copyTemplate(
 	try {
 		consola.info(`Creating project from template '${templateName}'...`)
 
-		let templateDir: string
-		if (template.path === '.' || template.path.startsWith('templates/')) {
-			templateDir = path.join(root, template.path)
-		} else {
-			templateDir = path.join(root, 'templates', template.path)
-		}
-
+		const templateDir = getTemplateDir(root, template)
 		consola.log(`Using template from: ${templateDir}`)
 
 		const templateConfigPath = path.join(templateDir, 'template.json')
