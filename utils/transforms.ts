@@ -227,17 +227,6 @@ export async function loadSharedPackageBase(
 	}
 }
 
-const SHARED_CONFIGS_FALLBACK: { file: string; condition: string | boolean }[] = [
-	{ file: 'eslint.config.js', condition: 'eslint' },
-	{ file: 'prettier.config.js', condition: 'prettier' },
-	{ file: 'tsconfig.json', condition: 'typescript' },
-	{ file: 'Dockerfile', condition: 'docker' },
-	{ file: 'docker-compose.yml', condition: 'docker' },
-	{ file: '.dockerignore', condition: 'docker' },
-	{ file: '.gitignore', condition: 'git' },
-	{ file: '.prettierignore', condition: 'prettier' }
-]
-
 /** Dockerfile source (templates are Bun-only). */
 const DOCKERFILE_SOURCE = 'Dockerfile.bun'
 
@@ -253,17 +242,13 @@ export async function getSharedConfigsToCopy(config: ProjectConfig, templatesRoo
 	}
 
 	const manifestPath = path.join(sharedConfigsDir, 'manifest.json')
-	let configsToCopy: { file: string; condition: string | boolean }[]
-
-	if (fs.existsSync(manifestPath)) {
-		const manifest = (await fs.readJson(manifestPath)) as { file: string; condition: string | boolean }[]
-		configsToCopy = manifest
-	} else {
-		configsToCopy = SHARED_CONFIGS_FALLBACK
+	if (!fs.existsSync(manifestPath)) {
+		return []
 	}
 
+	const manifest = (await fs.readJson(manifestPath)) as { file: string; condition: string | boolean }[]
 	const out: string[] = []
-	for (const { file, condition } of configsToCopy) {
+	for (const { file, condition } of manifest) {
 		const shouldCopy =
 			condition === true || (typeof condition === 'string' && config[condition as keyof ProjectConfig])
 		if (shouldCopy) {
@@ -279,8 +264,7 @@ export async function getSharedConfigsToCopy(config: ProjectConfig, templatesRoo
 
 /**
  * Copies shared config files (eslint, prettier, docker, etc.) into the project
- * based on config flags. Reads templates/shared/configs/manifest.json when present;
- * otherwise uses a hardcoded list for backward compatibility.
+ * based on config flags. Reads templates/shared/configs/manifest.json.
  */
 export async function copySharedConfigs(
 	projectPath: string,
