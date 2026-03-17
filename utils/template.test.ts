@@ -10,6 +10,7 @@ import {
 	isLocalTemplatePath,
 	resolveLocalTemplatePath
 } from './template'
+import { composeTemplatePackageJson, loadSharedPackageBase } from './transforms'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const TEMPLATES_ROOT = path.resolve(__dirname, '..', '..', 'templates')
@@ -260,5 +261,84 @@ describe('copyTemplate', () => {
 		await expect(copyTemplate('nonexistent', 'my-project', {}, { localPath: TEMPLATES_ROOT })).rejects.toThrow(
 			"Template 'nonexistent' not found"
 		)
+	})
+})
+
+describe('loadSharedPackageBase', () => {
+	it('returns null when shared package files are missing', async () => {
+		const result = await loadSharedPackageBase('/nonexistent-root-12345')
+		expect(result).toBeNull()
+	})
+
+	it('returns scripts and devDependencies when shared package exists', async () => {
+		if (!fs.existsSync(TEMPLATES_ROOT)) {
+			return
+		}
+		const result = await loadSharedPackageBase(TEMPLATES_ROOT)
+		expect(result).not.toBeNull()
+		expect(result!.scripts).toBeDefined()
+		expect(result!.scripts.dev).toContain('{{pm}}')
+		expect(result!.devDependencies).toBeDefined()
+		expect(result!.devDependencies.typescript).toBeDefined()
+	})
+})
+
+describe('composeTemplatePackageJson', () => {
+	let tmpDir: string
+	const originalCwd = process.cwd()
+
+	beforeEach(async () => {
+		tmpDir = await fs.mkdtemp(path.join(process.cwd(), 'honestjs-compose-test-'))
+		process.chdir(tmpDir)
+	})
+
+	afterEach(async () => {
+		process.chdir(originalCwd)
+		await fs.remove(tmpDir).catch(() => {})
+	})
+
+	it('no-ops when project has no package.json', async () => {
+		await composeTemplatePackageJson(tmpDir, TEMPLATES_ROOT)
+		expect(fs.existsSync(path.join(tmpDir, 'package.json'))).toBe(false)
+	})
+
+	it('no-ops when shared base is missing', async () => {
+		await fs.writeJson(path.join(tmpDir, 'package.json'), { name: 'test', scripts: { dev: 'custom' } })
+		await composeTemplatePackageJson(tmpDir, '/no-shared-root-xyz')
+		const pkg = await fs.readJson(path.join(tmpDir, 'package.json'))
+		expect(pkg.scripts.dev).toBe('custom')
+	})
+
+	it('merges shared scripts and devDependencies when shared base exists', async () => {
+		if (!fs.existsSync(TEMPLATES_ROOT)) {
+			return
+		}
+		await fs.writeJson(path.join(tmpDir, 'package.json'), {
+			name: 'my-app',
+			dependencies: {}
+		})
+		await composeTemplatePackageJson(tmpDir, TEMPLATES_ROOT)
+		const pkg = await fs.readJson(path.join(tmpDir, 'package.json'))
+		expect(pkg.name).toBe('my-app')
+		expect(pkg.scripts).toBeDefined()
+		expect(pkg.scripts.dev).toBeDefined()
+		expect(pkg.scripts.tunnel).toBeDefined()
+		expect(pkg.devDependencies).toBeDefined()
+		expect(pkg.devDependencies.typescript).toBeDefined()
+	})
+
+	it('template scripts override shared', async () => {
+		if (!fs.existsSync(TEMPLATES_ROOT)) {
+			return
+		}
+		await fs.writeJson(path.join(tmpDir, 'package.json'), {
+			name: 'my-app',
+			scripts: { dev: 'custom-dev' },
+			dependencies: {}
+		})
+		await composeTemplatePackageJson(tmpDir, TEMPLATES_ROOT)
+		const pkg = await fs.readJson(path.join(tmpDir, 'package.json'))
+		expect(pkg.scripts.dev).toBe('custom-dev')
+		expect(pkg.scripts.tunnel).toBeDefined()
 	})
 })

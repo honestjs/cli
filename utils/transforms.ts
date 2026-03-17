@@ -147,6 +147,45 @@ async function applyTransforms(
 	}
 }
 
+/** Paths under templates root for shared package base fragments. */
+const SHARED_PACKAGE_SCRIPTS = 'shared/package/scripts.json'
+const SHARED_PACKAGE_DEPS = 'shared/package/devDependencies.json'
+
+/**
+ * Loads shared package base (scripts and devDependencies) from templates repo.
+ * Returns null if either file is missing (no-op for older caches).
+ */
+export async function loadSharedPackageBase(templatesRoot: string): Promise<{
+	scripts: Record<string, string>
+	devDependencies: Record<string, string>
+} | null> {
+	const scriptsPath = path.join(templatesRoot, SHARED_PACKAGE_SCRIPTS)
+	const depsPath = path.join(templatesRoot, SHARED_PACKAGE_DEPS)
+	if (!fs.existsSync(scriptsPath) || !fs.existsSync(depsPath)) {
+		return null
+	}
+	const scripts = (await fs.readJson(scriptsPath)) as Record<string, string>
+	const devDependencies = (await fs.readJson(depsPath)) as Record<string, string>
+	return { scripts, devDependencies }
+}
+
+/**
+ * Composes project package.json with shared base scripts and devDependencies.
+ * Template-specific keys override shared defaults. No-op if package.json missing or shared base missing.
+ */
+export async function composeTemplatePackageJson(projectPath: string, templatesRoot: string): Promise<void> {
+	const packageJsonPath = path.join(projectPath, 'package.json')
+	if (!fs.existsSync(packageJsonPath)) return
+
+	const base = await loadSharedPackageBase(templatesRoot)
+	if (!base) return
+
+	const pkg = (await fs.readJson(packageJsonPath)) as Record<string, unknown>
+	pkg.scripts = { ...base.scripts, ...(pkg.scripts as Record<string, string>) }
+	pkg.devDependencies = { ...base.devDependencies, ...(pkg.devDependencies as Record<string, string>) }
+	await fs.writeJson(packageJsonPath, pkg, { spaces: 2 })
+}
+
 const SHARED_CONFIGS_FALLBACK: { file: string; condition: string | boolean }[] = [
 	{ file: 'eslint.config.js', condition: 'eslint' },
 	{ file: 'prettier.config.js', condition: 'prettier' },
