@@ -235,8 +235,7 @@ const SHARED_CONFIGS_FALLBACK: { file: string; condition: string | boolean }[] =
 	{ file: 'docker-compose.yml', condition: 'docker' },
 	{ file: '.dockerignore', condition: 'docker' },
 	{ file: '.gitignore', condition: 'git' },
-	{ file: '.prettierignore', condition: 'prettier' },
-	{ file: 'LICENSE', condition: true }
+	{ file: '.prettierignore', condition: 'prettier' }
 ]
 
 /** Dockerfile source (templates are Bun-only). */
