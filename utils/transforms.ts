@@ -7,6 +7,7 @@ import { consola } from 'consola'
 import fs from 'fs-extra'
 import { minimatch } from 'minimatch'
 import path from 'path'
+import { pathToFileURL } from 'url'
 import { getTemplateDir, ProjectConfig, Template } from './template'
 
 const PM_EXEC: Record<NonNullable<ProjectConfig['packageManager']>, string> = {
@@ -101,7 +102,7 @@ export async function applyTemplateTransforms(
 		}
 	}
 
-	await applyProjectConfiguration(projectPath, config)
+	await applyProjectConfiguration(projectPath, config, templatesRoot)
 }
 
 /**
@@ -147,43 +148,92 @@ async function applyTransforms(
 	}
 }
 
-/** Paths under templates root for shared package base fragments. */
-const SHARED_PACKAGE_SCRIPTS = 'shared/package/scripts.json'
-const SHARED_PACKAGE_DEPS = 'shared/package/devDependencies.json'
+/** Paths under templates root for shared package base (no extension). */
+const SHARED_PACKAGE_SCRIPTS_BASE = 'shared/package/scripts'
+const SHARED_PACKAGE_DEPS_BASE = 'shared/package/devDependencies'
+const SHARED_PACKAGE_DEPENDENCIES_BASE = 'shared/package/dependencies'
+
+export interface SharedPackageBaseResult {
+	scripts: Record<string, string> | null
+	devDependencies: Record<string, string> | null
+	dependencies: Record<string, string> | null
+}
 
 /**
- * Loads shared package base (scripts and devDependencies) from templates repo.
- * Returns null if either file is missing (no-op for older caches).
+ * Loads shared package base (scripts, devDependencies, dependencies) from templates repo.
+ * Loads from .js/.mjs modules only; context is required to call them.
+ * Returns null when context is missing or when scripts, devDependencies, and dependencies are all null.
  */
-export async function loadSharedPackageBase(templatesRoot: string): Promise<{
-	scripts: Record<string, string>
-	devDependencies: Record<string, string>
-} | null> {
-	const scriptsPath = path.join(templatesRoot, SHARED_PACKAGE_SCRIPTS)
-	const depsPath = path.join(templatesRoot, SHARED_PACKAGE_DEPS)
-	if (!fs.existsSync(scriptsPath) || !fs.existsSync(depsPath)) {
-		return null
+export async function loadSharedPackageBase(
+	templatesRoot: string,
+	context?: Partial<ProjectConfig>
+): Promise<SharedPackageBaseResult | null> {
+	if (context === undefined) return null
+
+	let scripts: Record<string, string> | null = null
+	let devDependencies: Record<string, string> | null = null
+	let dependencies: Record<string, string> | null = null
+
+	const scriptsJsPath = path.join(templatesRoot, SHARED_PACKAGE_SCRIPTS_BASE + '.js')
+	const scriptsMjsPath = path.join(templatesRoot, SHARED_PACKAGE_SCRIPTS_BASE + '.mjs')
+	if (fs.existsSync(scriptsJsPath) || fs.existsSync(scriptsMjsPath)) {
+		try {
+			const jsPath = fs.existsSync(scriptsJsPath) ? scriptsJsPath : scriptsMjsPath
+			const mod = await import(pathToFileURL(jsPath).href)
+			const fn = mod?.default
+			if (typeof fn === 'function') {
+				scripts = fn(context) as Record<string, string>
+			}
+		} catch (err) {
+			consola.warn(`⚠ Could not load shared scripts from ${scriptsJsPath}: ${err}`)
+		}
 	}
-	const scripts = (await fs.readJson(scriptsPath)) as Record<string, string>
-	const devDependencies = (await fs.readJson(depsPath)) as Record<string, string>
-	return { scripts, devDependencies }
+
+	const depsJsPath = path.join(templatesRoot, SHARED_PACKAGE_DEPS_BASE + '.js')
+	const depsMjsPath = path.join(templatesRoot, SHARED_PACKAGE_DEPS_BASE + '.mjs')
+	if (fs.existsSync(depsJsPath) || fs.existsSync(depsMjsPath)) {
+		try {
+			const jsPath = fs.existsSync(depsJsPath) ? depsJsPath : depsMjsPath
+			const mod = await import(pathToFileURL(jsPath).href)
+			const fn = mod?.default
+			if (typeof fn === 'function') {
+				devDependencies = fn(context) as Record<string, string>
+			}
+		} catch (err) {
+			consola.warn(`⚠ Could not load shared devDependencies from ${depsJsPath}: ${err}`)
+		}
+	}
+
+	const dependenciesJsPath = path.join(templatesRoot, SHARED_PACKAGE_DEPENDENCIES_BASE + '.js')
+	const dependenciesMjsPath = path.join(templatesRoot, SHARED_PACKAGE_DEPENDENCIES_BASE + '.mjs')
+	if (fs.existsSync(dependenciesJsPath) || fs.existsSync(dependenciesMjsPath)) {
+		try {
+			const jsPath = fs.existsSync(dependenciesJsPath) ? dependenciesJsPath : dependenciesMjsPath
+			const mod = await import(pathToFileURL(jsPath).href)
+			const fn = mod?.default
+			if (typeof fn === 'function') {
+				dependencies = fn(context) as Record<string, string>
+			}
+		} catch (err) {
+			consola.warn(`⚠ Could not load shared dependencies from ${dependenciesJsPath}: ${err}`)
+		}
+	}
+
+	if (scripts == null && devDependencies == null && dependencies == null) return null
+	return {
+		scripts,
+		devDependencies,
+		dependencies
+	}
 }
 
 /**
  * Composes project package.json with shared base scripts and devDependencies.
- * Template-specific keys override shared defaults. No-op if package.json missing or shared base missing.
+ * Shared base is loaded from .js modules in applyProjectConfiguration (with context);
+ * this step is a no-op when using JS-only shared package.
  */
-export async function composeTemplatePackageJson(projectPath: string, templatesRoot: string): Promise<void> {
-	const packageJsonPath = path.join(projectPath, 'package.json')
-	if (!fs.existsSync(packageJsonPath)) return
-
-	const base = await loadSharedPackageBase(templatesRoot)
-	if (!base) return
-
-	const pkg = (await fs.readJson(packageJsonPath)) as Record<string, unknown>
-	pkg.scripts = { ...base.scripts, ...(pkg.scripts as Record<string, string>) }
-	pkg.devDependencies = { ...base.devDependencies, ...(pkg.devDependencies as Record<string, string>) }
-	await fs.writeJson(packageJsonPath, pkg, { spaces: 2 })
+export async function composeTemplatePackageJson(_projectPath: string, _templatesRoot: string): Promise<void> {
+	// Shared scripts and devDependencies are merged in applyProjectConfiguration when context is available.
 }
 
 const SHARED_CONFIGS_FALLBACK: { file: string; condition: string | boolean }[] = [
@@ -317,7 +367,11 @@ async function getAllFiles(dir: string): Promise<string[]> {
  * Applies project config: package.json (name, scripts, package manager),
  * README placeholders, git init, and dependency install.
  */
-export async function applyProjectConfiguration(projectPath: string, config?: Partial<ProjectConfig>): Promise<void> {
+export async function applyProjectConfiguration(
+	projectPath: string,
+	config?: Partial<ProjectConfig>,
+	templatesRoot?: string
+): Promise<void> {
 	if (!config) return
 
 	const packageJsonPath = path.join(projectPath, 'package.json')
@@ -326,41 +380,31 @@ export async function applyProjectConfiguration(projectPath: string, config?: Pa
 
 		packageJson.name = config.name || packageJson.name
 
+		if (templatesRoot) {
+			const base = await loadSharedPackageBase(templatesRoot, config)
+			if (base) {
+				if (base.scripts != null) {
+					packageJson.scripts = { ...base.scripts, ...(packageJson.scripts as Record<string, string>) }
+				}
+				if (base.devDependencies != null) {
+					packageJson.devDependencies = {
+						...base.devDependencies,
+						...(packageJson.devDependencies as Record<string, string>)
+					}
+				}
+				if (base.dependencies != null) {
+					packageJson.dependencies = {
+						...base.dependencies,
+						...(packageJson.dependencies as Record<string, string>)
+					}
+				}
+			}
+		}
+
 		const pm = config.packageManager || 'bun'
 		Object.keys(packageJson.scripts || {}).forEach((key) => {
 			packageJson.scripts[key] = substitutePackageManagerPlaceholders(packageJson.scripts[key], pm)
 		})
-
-		if (!config.eslint) {
-			delete packageJson.scripts?.lint
-			delete packageJson.scripts?.['lint:fix']
-		} else {
-			packageJson.scripts = packageJson.scripts || {}
-			packageJson.scripts.lint = `${pm} run eslint .`
-			packageJson.scripts['lint:fix'] = `${pm} run eslint . --fix`
-		}
-
-		if (!config.prettier) {
-			delete packageJson.scripts?.format
-			delete packageJson.scripts?.['format:check']
-		} else {
-			packageJson.scripts = packageJson.scripts || {}
-			packageJson.scripts.format = `${pm} run prettier --write .`
-			packageJson.scripts['format:check'] = `${pm} run prettier --check .`
-		}
-
-		if (!config.docker) {
-			delete packageJson.scripts?.['docker:build']
-			delete packageJson.scripts?.['docker:up']
-			delete packageJson.scripts?.['docker:up:build']
-			delete packageJson.scripts?.['docker:down']
-		} else {
-			packageJson.scripts = packageJson.scripts || {}
-			packageJson.scripts['docker:build'] = 'docker compose build'
-			packageJson.scripts['docker:up'] = 'docker compose up -d'
-			packageJson.scripts['docker:up:build'] = 'docker compose up -d --build'
-			packageJson.scripts['docker:down'] = 'docker compose down'
-		}
 
 		await fs.writeJson(packageJsonPath, packageJson, { spaces: 2 })
 	}

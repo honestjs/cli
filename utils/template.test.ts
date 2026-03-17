@@ -233,6 +233,32 @@ describe('copyTemplate', () => {
 		expect(fs.existsSync(path.join(projectPath, 'node_modules'))).toBe(false)
 	})
 
+	it('Bun scaffold omits tsx/tsup and has dev/start/build scripts from shared JS', async () => {
+		if (!fs.existsSync(TEMPLATES_ROOT)) {
+			return
+		}
+		await copyTemplate(
+			'blank',
+			'bun-scripts-project',
+			{
+				git: false,
+				install: false,
+				packageManager: 'bun'
+			},
+			{ localPath: TEMPLATES_ROOT, templatesRoot: TEMPLATES_ROOT }
+		)
+		const projectPath = path.join(tmpDir, 'bun-scripts-project')
+		const pkg = await fs.readJson(path.join(projectPath, 'package.json'))
+		const scripts = pkg.scripts || {}
+		const devDeps = pkg.devDependencies || {}
+		expect(devDeps.tsx).toBeUndefined()
+		expect(devDeps.tsup).toBeUndefined()
+		expect(scripts.dev).toBeDefined()
+		expect(scripts.start).toBe('bun dist/main.js')
+		expect(scripts['build:bun']).toBeDefined()
+		expect(scripts['build:node']).toBeDefined()
+	})
+
 	it('rewrites only bun run / bunx when scaffolding with npm', async () => {
 		if (!fs.existsSync(TEMPLATES_ROOT)) {
 			return
@@ -250,8 +276,35 @@ describe('copyTemplate', () => {
 		const projectPath = path.join(tmpDir, 'npm-scripts-project')
 		const pkg = await fs.readJson(path.join(projectPath, 'package.json'))
 		const scripts = pkg.scripts || {}
-		expect(scripts.start).toBe('bun dist/main.js')
-		expect(scripts.dev).toMatch(/npm run/)
+		expect(scripts.start).toBe('node dist/main.js')
+		expect(scripts.dev).toBe('npm run dev:watch')
+		expect(scripts['build:node']).toContain('tsup')
+		expect(pkg.devDependencies?.tsx).toBeDefined()
+		expect(pkg.devDependencies?.tsup).toBeDefined()
+	})
+
+	it('applies PM-specific script overrides when scaffolding with pnpm', async () => {
+		if (!fs.existsSync(TEMPLATES_ROOT)) {
+			return
+		}
+		await copyTemplate(
+			'blank',
+			'pnpm-scripts-project',
+			{
+				git: false,
+				install: false,
+				packageManager: 'pnpm'
+			},
+			{ localPath: TEMPLATES_ROOT, templatesRoot: TEMPLATES_ROOT }
+		)
+		const projectPath = path.join(tmpDir, 'pnpm-scripts-project')
+		const pkg = await fs.readJson(path.join(projectPath, 'package.json'))
+		const scripts = pkg.scripts || {}
+		expect(scripts.start).toBe('node dist/main.js')
+		expect(scripts.dev).toBe('pnpm run dev:watch')
+		expect(scripts['build:node']).toContain('tsup')
+		expect(pkg.devDependencies?.tsx).toBeDefined()
+		expect(pkg.devDependencies?.tsup).toBeDefined()
 	})
 
 	it('throws for non-existent template', async () => {
@@ -270,16 +323,27 @@ describe('loadSharedPackageBase', () => {
 		expect(result).toBeNull()
 	})
 
-	it('returns scripts and devDependencies when shared package exists', async () => {
-		if (!fs.existsSync(TEMPLATES_ROOT)) {
-			return
+	it('returns null when context is undefined and JS files exist', async () => {
+		if (!fs.existsSync(TEMPLATES_ROOT)) return
+		const result = await loadSharedPackageBase(TEMPLATES_ROOT, undefined)
+		expect(result).toBeNull()
+	})
+
+	it('returns scripts and devDependencies from JS when context is provided', async () => {
+		if (!fs.existsSync(TEMPLATES_ROOT)) return
+		const context = {
+			packageManager: 'bun' as const,
+			eslint: true,
+			prettier: true,
+			docker: true
 		}
-		const result = await loadSharedPackageBase(TEMPLATES_ROOT)
+		const result = await loadSharedPackageBase(TEMPLATES_ROOT, context)
 		expect(result).not.toBeNull()
 		expect(result!.scripts).toBeDefined()
-		expect(result!.scripts.dev).toContain('{{pm}}')
+		expect(result!.scripts!.tunnel).toContain('{{pmExec}}')
+		expect(result!.scripts!['dev:watch']).toBeDefined()
 		expect(result!.devDependencies).toBeDefined()
-		expect(result!.devDependencies.typescript).toBeDefined()
+		expect(result!.devDependencies!.typescript).toBeDefined()
 	})
 })
 
@@ -302,43 +366,10 @@ describe('composeTemplatePackageJson', () => {
 		expect(fs.existsSync(path.join(tmpDir, 'package.json'))).toBe(false)
 	})
 
-	it('no-ops when shared base is missing', async () => {
+	it('no-ops and leaves package.json unchanged', async () => {
 		await fs.writeJson(path.join(tmpDir, 'package.json'), { name: 'test', scripts: { dev: 'custom' } })
-		await composeTemplatePackageJson(tmpDir, '/no-shared-root-xyz')
+		await composeTemplatePackageJson(tmpDir, TEMPLATES_ROOT)
 		const pkg = await fs.readJson(path.join(tmpDir, 'package.json'))
 		expect(pkg.scripts.dev).toBe('custom')
-	})
-
-	it('merges shared scripts and devDependencies when shared base exists', async () => {
-		if (!fs.existsSync(TEMPLATES_ROOT)) {
-			return
-		}
-		await fs.writeJson(path.join(tmpDir, 'package.json'), {
-			name: 'my-app',
-			dependencies: {}
-		})
-		await composeTemplatePackageJson(tmpDir, TEMPLATES_ROOT)
-		const pkg = await fs.readJson(path.join(tmpDir, 'package.json'))
-		expect(pkg.name).toBe('my-app')
-		expect(pkg.scripts).toBeDefined()
-		expect(pkg.scripts.dev).toBeDefined()
-		expect(pkg.scripts.tunnel).toBeDefined()
-		expect(pkg.devDependencies).toBeDefined()
-		expect(pkg.devDependencies.typescript).toBeDefined()
-	})
-
-	it('template scripts override shared', async () => {
-		if (!fs.existsSync(TEMPLATES_ROOT)) {
-			return
-		}
-		await fs.writeJson(path.join(tmpDir, 'package.json'), {
-			name: 'my-app',
-			scripts: { dev: 'custom-dev' },
-			dependencies: {}
-		})
-		await composeTemplatePackageJson(tmpDir, TEMPLATES_ROOT)
-		const pkg = await fs.readJson(path.join(tmpDir, 'package.json'))
-		expect(pkg.scripts.dev).toBe('custom-dev')
-		expect(pkg.scripts.tunnel).toBeDefined()
 	})
 })

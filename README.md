@@ -32,8 +32,7 @@ hnjs new <project-name> [options]
 
 **Options**
 
-- `-t, --template <template>`: Template name (e.g., `barebone`, `blank`, `mvc`) or local path (`./path`,
-  `~/path`).
+- `-t, --template <template>`: Template name (e.g., `barebone`, `blank`, `mvc`) or local path (`./path`, `~/path`).
 - `-p, --package-manager <manager>`: Choose a package manager (e.g., `bun`, `npm`, `yarn`, `pnpm`).
 - `--typescript`: Use TypeScript in the project.
 - `--no-typescript`: Do not use TypeScript in the project.
