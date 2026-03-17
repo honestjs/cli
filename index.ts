@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * HonestJS CLI entry point.
- * Registers commands (new, list, info, generate) and parses CLI arguments.
+ * Registers commands (new, list, info, doctor, generate) and parses CLI arguments.
  * Version is read from package.json at runtime.
  */
 

@@ -9,12 +9,11 @@ import { consola } from 'consola'
 import fs from 'fs-extra'
 import os from 'os'
 import path from 'path'
+import { CACHE_DIR_NAME } from '../utils/constants.js'
 
 const ok = (s: string) => chalk.green('✓') + ' ' + s
 const warn = (s: string) => chalk.yellow('○') + ' ' + s
 const fail = (s: string) => chalk.red('✗') + ' ' + s
-
-const CACHE_DIR_NAME = 'honestjs-templates'
 
 function checkRuntime(): { ok: boolean; message: string } {
 	const isBun = typeof (process.versions as { bun?: string })?.bun !== 'undefined'
