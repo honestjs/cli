@@ -92,11 +92,14 @@ const newCommand = new Command('new')
 
 			if (options.yes) {
 				config = createDefaultConfig(config, templates, useLocalPath)
+				validateProjectConfig(config)
 			} else {
+				if (config.name?.trim()) {
+					validateProjectName(config.name.trim())
+				}
 				config = await promptForConfiguration(config, templates, templateOptions)
+				validateProjectConfig(config)
 			}
-
-			validateProjectConfig(config)
 
 			if (options.dryRun) {
 				const root = await getTemplatesRoot(templateOptions)
@@ -308,17 +311,30 @@ async function promptForConfiguration(
 	return { ...config, ...generalAnswers }
 }
 
+/** Validates project name (required, format, directory must not exist). Exits on failure. Call before asking other questions when name is already known. */
+function validateProjectName(name: string): void {
+	if (!name || !name.trim()) {
+		consola.error('Error: Project name is required')
+		process.exit(1)
+	}
+	const trimmed = name.trim()
+	if (!/^[a-z0-9-]+$/.test(trimmed)) {
+		consola.error('Error: Project name must be lowercase with hyphens only')
+		process.exit(1)
+	}
+	if (fs.existsSync(trimmed)) {
+		consola.error(`Error: Directory '${trimmed}' already exists`)
+		process.exit(1)
+	}
+}
+
 /** Ensures project name is set and target directory does not exist. */
 function validateProjectConfig(config: ProjectConfig): void {
 	if (!config.name) {
 		consola.error('Error: Project name is required')
 		process.exit(1)
 	}
-
-	if (fs.existsSync(config.name)) {
-		consola.error(`Error: Directory '${config.name}' already exists`)
-		process.exit(1)
-	}
+	validateProjectName(config.name)
 }
 
 /** Prints post-creation instructions (cd, install, dev). */
