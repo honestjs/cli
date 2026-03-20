@@ -135,13 +135,13 @@ describe('generateCommand', () => {
 		})
 	})
 
-	it('exits with code 1 for unknown schematic', async () => {
+	it('exits with validation code for unknown schematic', async () => {
 		const exitSpy = vi.spyOn(process, 'exit').mockImplementation((code?: string | number | null) => {
 			throw new Error(`exit:${code ?? 0}`)
 		})
 
-		await expect(generateCommand.parseAsync(['unknown', 'users'], { from: 'user' })).rejects.toThrow('exit:1')
-		expect(mockConsola.error).toHaveBeenCalledWith('Unknown schematic: unknown')
+		await expect(generateCommand.parseAsync(['unknown', 'users'], { from: 'user' })).rejects.toThrow('exit:2')
+		expect(mockConsola.error).toHaveBeenCalledWith('❌ ValidationError: Unknown schematic: unknown')
 
 		exitSpy.mockRestore()
 	})

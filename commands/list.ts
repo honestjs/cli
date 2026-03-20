@@ -5,7 +5,7 @@
 
 import { Command } from 'commander'
 import { consola } from 'consola'
-import { getTemplates } from '../utils'
+import { getTemplates, handleCommandError } from '../utils'
 
 const listCommand = new Command('list')
 	.description('List available templates')
@@ -120,8 +120,7 @@ const listCommand = new Command('list')
 			consola.log('  • Package manager selection (Bun, npm, yarn, pnpm)')
 			consola.log('  • Automatic dependency installation')
 		} catch (error) {
-			consola.error(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`)
-			process.exit(1)
+			handleCommandError(error, { json: options.json })
 		}
 	})
 

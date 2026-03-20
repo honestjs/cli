@@ -8,6 +8,7 @@ import { Command } from 'commander'
 import { consola } from 'consola'
 import fs from 'fs-extra'
 import type { GenerateOptions } from '../generators/base'
+import { handleCommandError, ValidationError } from '../utils'
 import { generateFilter } from '../generators/components/filter'
 import { generateGuard } from '../generators/components/guard'
 import { generateMiddleware } from '../generators/components/middleware'
@@ -28,9 +29,10 @@ const generateCommand = new Command('generate')
 	.option('--dry-run', 'Show what would be created without writing files')
 	.option('--skip-import', 'Skip importing the generated item')
 	.option('--export', 'Export the generated item')
+	.option('--json', 'Output result as JSON')
 	.action(async (schematic, name, options) => {
 		try {
-			consola.start(options.dryRun ? 'Planning generation...' : 'Generating files...')
+			if (!options.json) consola.start(options.dryRun ? 'Planning generation...' : 'Generating files...')
 
 			const generateOptions: GenerateOptions = {
 				name,
@@ -78,26 +80,45 @@ const generateCommand = new Command('generate')
 					result = await generatePipe(generateOptions)
 					break
 				default:
-					consola.error(`Unknown schematic: ${schematic}`)
-					consola.warn('\nAvailable schematics:')
-					consola.log('  controller (c)     - Generate a controller')
-					consola.log('  service (s)         - Generate a service')
-					consola.log('  module (m)          - Generate a module')
-					consola.log('  view (v)            - Generate a view')
-					consola.log('  middleware (c-m)    - Generate a middleware')
-					consola.log('  guard (c-g)         - Generate a guard')
-					consola.log('  filter (c-f)        - Generate a filter')
-					consola.log('  pipe (c-p)          - Generate a pipe')
-					consola.warn('\nExamples:')
-					consola.log('  honestjs g controller user    -> modules/users/users.controller.ts')
-					consola.log('  honestjs g controller users   -> modules/users/users.controller.ts')
-					consola.log('  honestjs g service user       -> modules/users/users.service.ts')
-					consola.log('  honestjs g view users         -> modules/users/users.view.tsx')
-					consola.log('  honestjs g middleware logger  -> components/logger/logger.middleware.ts')
-					consola.log('  honestjs g guard auth         -> components/auth/auth.guard.ts')
-					consola.log('  honestjs g filter notfound    -> components/notfound/notfound.filter.ts')
-					consola.log('  honestjs g pipe parseInt      -> components/parseint/parseint.pipe.ts')
-					process.exit(1)
+					if (!options.json) {
+						consola.warn('Available schematics:')
+						consola.log('  controller (c)     - Generate a controller')
+						consola.log('  service (s)         - Generate a service')
+						consola.log('  module (m)          - Generate a module')
+						consola.log('  view (v)            - Generate a view')
+						consola.log('  middleware (c-m)    - Generate a middleware')
+						consola.log('  guard (c-g)         - Generate a guard')
+						consola.log('  filter (c-f)        - Generate a filter')
+						consola.log('  pipe (c-p)          - Generate a pipe')
+						consola.warn('\nExamples:')
+						consola.log('  honestjs g controller user    -> modules/users/users.controller.ts')
+						consola.log('  honestjs g controller users   -> modules/users/users.controller.ts')
+						consola.log('  honestjs g service user       -> modules/users/users.service.ts')
+						consola.log('  honestjs g view users         -> modules/users/users.view.tsx')
+						consola.log('  honestjs g middleware logger  -> components/logger/logger.middleware.ts')
+						consola.log('  honestjs g guard auth         -> components/auth/auth.guard.ts')
+						consola.log('  honestjs g filter notfound    -> components/notfound/notfound.filter.ts')
+						consola.log('  honestjs g pipe parseInt      -> components/parseint/parseint.pipe.ts')
+					}
+					throw new ValidationError(`Unknown schematic: ${schematic}`)
+			}
+
+			if (options.json) {
+				consola.log(
+					JSON.stringify(
+						{
+							action: 'generate',
+							schematic,
+							name,
+							dryRun: Boolean(options.dryRun),
+							files: result.files,
+							imports: result.imports
+						},
+						null,
+						2
+					)
+				)
+				return
 			}
 
 			consola.success(options.dryRun ? 'Dry run complete.' : 'Files generated successfully!')
@@ -116,8 +137,7 @@ const generateCommand = new Command('generate')
 				})
 			}
 		} catch (error) {
-			consola.error(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`)
-			process.exit(1)
+			handleCommandError(error, { json: options.json })
 		}
 	})
 

@@ -24,6 +24,10 @@ honestjs new <project-name> [options]
 honest new <project-name> [options]
 
 hnjs new <project-name> [options]
+
+honestjs create <project-name> [options]
+
+honestjs scaffold <project-name> [options]
 ```
 
 **Arguments**
@@ -49,6 +53,9 @@ hnjs new <project-name> [options]
 - `-y, --yes`: Skip all prompts and use default settings.
 - `--offline`: Use cached templates only (no network).
 - `--refresh-templates`: Force refresh template cache before use.
+- `--dry-run`: Show what would be created without writing files.
+- `--strict`: Fail on first transform error (useful for CI).
+- `--json`: Output command result as JSON.
 
 **Local templates:** Use a local path for `--template` to scaffold from a local templates repo or single template
 directory. Examples: `honestjs new my-app -t ./templates -y`, `honestjs new my-app -t ~/company/templates -y`.
@@ -77,11 +84,13 @@ The `info` command shows information about the CLI, templates, and your environm
 ```bash
 honestjs info
 honestjs info --local ./templates
+honestjs info --json
 ```
 
 **Options**
 
 - `-l, --local <path>`: Show templates from a local path instead of remote.
+- `--json`: Output command result as JSON.
 
 ### `doctor`
 
@@ -98,6 +107,7 @@ The `generate` command (aliased as `g`) creates new files based on a schematic.
 
 ```bash
 honestjs generate <schematic> <name> [options]
+honestjs generate <schematic> <name> --json
 ```
 
 **Arguments**
@@ -113,6 +123,7 @@ honestjs generate <schematic> <name> [options]
 - `--dry-run`: Show what would be created without writing files.
 - `--skip-import`: Do not import the generated item into other files.
 - `--export`: Export the generated item.
+- `--json`: Output command result as JSON.
 
 **Available Schematics**
 

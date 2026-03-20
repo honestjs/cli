@@ -5,7 +5,6 @@
  * Version is read from package.json at runtime.
  */
 
-import chalk from 'chalk'
 import { Command } from 'commander'
 import { existsSync, readFileSync } from 'fs'
 import { dirname, join } from 'path'
@@ -15,6 +14,7 @@ import { generateCommand } from './commands/generate.js'
 import { infoCommand } from './commands/info.js'
 import { listCommand } from './commands/list.js'
 import { newCommand } from './commands/new.js'
+import { handleCommandError } from './utils/errors.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const pkgPath = [join(__dirname, 'package.json'), join(__dirname, '..', 'package.json')].find((p) => existsSync(p))
@@ -34,10 +34,5 @@ program.addCommand(generateCommand)
 try {
 	await program.parseAsync()
 } catch (err) {
-	if (err instanceof Error) {
-		console.error(chalk.red('Error:'), err.message)
-	} else {
-		console.error(chalk.red('An unexpected error occurred'))
-	}
-	process.exit(1)
+	handleCommandError(err, { json: process.argv.includes('--json') })
 }

@@ -10,6 +10,7 @@ import prompts, { PromptObject } from 'prompts'
 import path from 'path'
 import {
 	copyTemplate,
+	handleCommandError,
 	getLocalTemplatesRoot,
 	getTemplateDir,
 	getTemplatePrompts,
@@ -19,12 +20,16 @@ import {
 	isLocalTemplatePath,
 	listTemplateFiles,
 	resolveLocalTemplatePath,
+	TemplateError,
 	type GetTemplatesOptions,
 	type ProjectConfig,
-	type Template
+	type Template,
+	ValidationError
 } from '../utils'
 
 const newCommand = new Command('new')
+	.alias('create')
+	.alias('scaffold')
 	.description('Create a new honestjs project')
 	.argument('[project-name]', 'Name of the project')
 	.option('-t, --template <template>', 'Template name (barebone, blank, mvc) or local path (./path, ~/path)')
@@ -46,6 +51,7 @@ const newCommand = new Command('new')
 	.option('--refresh-templates', 'Force refresh template cache before use')
 	.option('--strict', 'Fail on first transform error (e.g. for CI)')
 	.option('--dry-run', 'Show what would be created without writing files')
+	.option('--json', 'Output result as JSON')
 	.action(async (projectName, options) => {
 		let config: ProjectConfig = {
 			name: projectName || '',
@@ -67,10 +73,9 @@ const newCommand = new Command('new')
 				const resolved = resolveLocalTemplatePath(options.template!)
 				const info = getLocalTemplatesRoot(resolved)
 				if (!info) {
-					consola.error(
+					throw new ValidationError(
 						`Invalid local template path: '${options.template}'. Expected a directory with templates.json (repo root) or template.json + files/ (single template).`
 					)
-					process.exit(1)
 				}
 				templateOptions = {
 					localPath: resolved,
@@ -106,22 +111,15 @@ const newCommand = new Command('new')
 			if (options.dryRun) {
 				const root = await getTemplatesRoot(templateOptions)
 				const template = (await getTemplates(templateOptions)).find((t) => t.name === config.template)
-				if (!template) throw new Error(`Template '${config.template}' not found`)
+				if (!template) throw new TemplateError(`Template '${config.template}' not found`)
 				const projectPath = path.join(process.cwd(), config.name)
 				const templateDir = getTemplateDir(root, template)
-				consola.info('Dry run: the following would be created')
-				consola.log(`  Target: ${projectPath}`)
-				consola.log(`  Template: ${config.template} (${templateDir})`)
+				const sharedConfigOutput: string[] = []
+				const outputFiles: string[] = []
 				const filesDir = path.join(templateDir, 'files')
 				if (fs.existsSync(filesDir)) {
 					const fileList = await listTemplateFiles(filesDir)
-					consola.log(`  Would copy ${fileList.length} file(s) from template`)
-					if (fileList.length <= 20) {
-						fileList.forEach((f) => consola.log(`    - ${f}`))
-					} else {
-						fileList.slice(0, 15).forEach((f) => consola.log(`    - ${f}`))
-						consola.log(`    ... and ${fileList.length - 15} more`)
-					}
+					outputFiles.push(...fileList)
 				}
 				const mergedConfig: ProjectConfig = {
 					...config,
@@ -134,19 +132,71 @@ const newCommand = new Command('new')
 					docker: config.docker ?? true
 				}
 				const sharedConfigs = await getSharedConfigsToCopy(mergedConfig, root)
-				consola.log(`  Would add shared configs: ${sharedConfigs.length} file(s)`)
-				sharedConfigs.forEach((f) => consola.log(`    - ${f}`))
-				consola.success('Dry run complete. Run without --dry-run to create the project.')
+				sharedConfigOutput.push(...sharedConfigs)
+
+				if (options.json) {
+					consola.log(
+						JSON.stringify(
+							{
+								action: 'new',
+								dryRun: true,
+								target: projectPath,
+								template: config.template,
+								templateDir,
+								files: outputFiles,
+								sharedConfigs: sharedConfigOutput,
+								config: mergedConfig
+							},
+							null,
+							2
+						)
+					)
+				} else {
+					consola.info('Dry run: the following would be created')
+					consola.log(`  Target: ${projectPath}`)
+					consola.log(`  Template: ${config.template} (${templateDir})`)
+					consola.log(`  Would copy ${outputFiles.length} file(s) from template`)
+					if (outputFiles.length <= 20) {
+						outputFiles.forEach((f) => consola.log(`    - ${f}`))
+					} else {
+						outputFiles.slice(0, 15).forEach((f) => consola.log(`    - ${f}`))
+						consola.log(`    ... and ${outputFiles.length - 15} more`)
+					}
+					consola.log(`  Would add shared configs: ${sharedConfigOutput.length} file(s)`)
+					sharedConfigOutput.forEach((f) => consola.log(`    - ${f}`))
+					consola.success('Dry run complete. Run without --dry-run to create the project.')
+				}
 				return
 			}
 
-			consola.start('Creating project...')
+			if (!options.json) consola.start('Creating project...')
 			await copyTemplate(config.template, config.name, config, templateOptions)
-			consola.success('Project created successfully!')
-
-			showNextSteps(config)
+			if (options.json) {
+				consola.log(
+					JSON.stringify(
+						{
+							action: 'new',
+							dryRun: false,
+							created: true,
+							project: config.name,
+							template: config.template,
+							packageManager: config.packageManager,
+							nextSteps: [
+								`cd ${config.name}`,
+								...(config.install ? [] : [`${config.packageManager} install`]),
+								`${config.packageManager} run dev`
+							]
+						},
+						null,
+						2
+					)
+				)
+			} else {
+				consola.success('Project created successfully!')
+				showNextSteps(config)
+			}
 		} catch (error) {
-			handleError(error)
+			handleCommandError(error, { json: options.json })
 		}
 	})
 
@@ -190,12 +240,11 @@ function createDefaultConfig(
 	}
 
 	if (!templates.find((t) => t.name === defaultConfig.template)) {
-		consola.error(`Error: Template '${defaultConfig.template}' not found`)
-		consola.warn('Available templates:')
-		templates.forEach((t) => {
-			consola.info(`  - ${t.name}: ${t.description}`)
-		})
-		process.exit(1)
+		throw new TemplateError(
+			`Template '${defaultConfig.template}' not found. Available templates: ${templates
+				.map((t) => t.name)
+				.join(', ')}`
+		)
 	}
 
 	return defaultConfig
@@ -337,17 +386,14 @@ async function promptForConfiguration(
 /** Validates project name (required, format, directory must not exist). Exits on failure. Call before asking other questions when name is already known. */
 function validateProjectName(name: string): void {
 	if (!name || !name.trim()) {
-		consola.error('Error: Project name is required')
-		process.exit(1)
+		throw new ValidationError('Project name is required')
 	}
 	const trimmed = name.trim()
 	if (!/^[a-z0-9-]+$/.test(trimmed)) {
-		consola.error('Error: Project name must be lowercase with hyphens only')
-		process.exit(1)
+		throw new ValidationError('Project name must be lowercase with hyphens only')
 	}
 	if (fs.existsSync(trimmed)) {
-		consola.error(`Error: Directory '${trimmed}' already exists`)
-		process.exit(1)
+		throw new ValidationError(`Directory '${trimmed}' already exists`)
 	}
 }
 
@@ -377,16 +423,16 @@ function validateTemplateRuntimeCompatibility(config: ProjectConfig, templates: 
 			allowed.length === 1
 				? `Use --package-manager ${allowed[0]}.`
 				: `Use one of: ${allowed.map((m) => `--package-manager ${m}`).join(', ')}.`
-		consola.error(`Template '${config.template}' only supports ${template.runtimes.join(' and ')}. ${hint}`)
-		process.exit(1)
+		throw new ValidationError(
+			`Template '${config.template}' only supports ${template.runtimes.join(' and ')}. ${hint}`
+		)
 	}
 }
 
 /** Ensures project name is set and target directory does not exist. */
 function validateProjectConfig(config: ProjectConfig): void {
 	if (!config.name) {
-		consola.error('Error: Project name is required')
-		process.exit(1)
+		throw new ValidationError('Project name is required')
 	}
 	validateProjectName(config.name)
 }
@@ -402,12 +448,6 @@ function showNextSteps(config: ProjectConfig): void {
 
 	consola.log(`  ${config.packageManager} run dev`)
 	consola.log('\nHappy coding! 🚀')
-}
-
-/** Logs error and exits with code 1. */
-function handleError(error: unknown): void {
-	consola.error(`\nError: ${error instanceof Error ? error.message : 'An unknown error occurred'}`)
-	process.exit(1)
 }
 
 export { newCommand }
